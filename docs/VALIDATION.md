@@ -4,7 +4,7 @@ Verified in the attached Linux environment using Python 3.12.14. No user
 experimental images were available. The Windows interactive crop window still
 requires a check on the user's computer.
 
-- **48 unittest cases: 47 passed, one optional Qiskit equivalence check skipped**
+- **52 unittest cases: 51 passed, one optional Qiskit equivalence check skipped**
   because Qiskit was unavailable. The mandatory NumPy quantum map was checked
   against independent explicit gate matrices and an analytic fidelity result.
 - A complete CLI run processed **200 native 768×512, 16-bit TIFF software-test
@@ -34,6 +34,15 @@ requires a check on the user's computer.
   obsolete classifier files are removed on explicit overwrite.
 - The project built offline as a Python wheel, installed into an isolated
   target folder, and its module CLI launched outside the source tree.
+- The Anaconda starter notebook was validated with nbformat and executed
+  top-to-bottom using nbclient and a real Python Jupyter kernel on the 200-frame
+  software fixture. All 10 code cells passed and produced 16 embedded image
+  outputs. The processing child generated 42 figure exports, preserved the
+  notebook's inline backend, and left the full-record run disabled. The source
+  starter notebook is saved clean, without software-fixture results.
+- Notebook helper tests check kernel-interpreter reuse, partial results,
+  output-folder protection, path resolution and interruption cleanup. The
+  actual Anaconda Navigator / Windows notebook interface remains untested here.
 
 Temporary software fixtures and their plots are excluded from the source ZIP.
 Full experimental validation still requires checking actual TIFF ordering,

@@ -4,7 +4,24 @@ A runnable local Python project for a Windows folder of single-frame TIFF images
 
 The first run uses 200 **consecutive** images. The full configuration uses up to 20,000. Default state count, crop, feature count, rank, and temporal gaps are exploratory settings rather than established properties of this flow.
 
-## Start on Windows
+## Start with Anaconda and Jupyter Notebook
+
+Open Anaconda Navigator, launch Jupyter Notebook, and open
+[`Schlieren_POD_QSVM.ipynb`](Schlieren_POD_QSVM.ipynb) in the extracted project
+folder. Run its cells in order with **Shift+Enter**. The notebook checks your
+active Python kernel, lets you set the TIFF folder and fixed crop, runs the
+200-frame pilot, and displays saved figures and tables inline. Keep the notebook
+beside the `schlieren_qml` and `configs` folders. Your existing Anaconda
+environment can be used with Python 3.10 or newer; no separate virtual
+environment is required.
+
+If packages are missing, the notebook can install them into its active kernel
+with `%pip install -r requirements.txt`; restart the kernel afterward. For a
+dedicated Conda environment, use the supplied `environment.yml`. See
+[`docs/ANACONDA_JUPYTER.md`](docs/ANACONDA_JUPYTER.md) for step-by-step setup,
+Windows path examples, kernel troubleshooting and the optional full-record run.
+
+## Alternative: run from PowerShell on Windows
 
 Open PowerShell in this project folder. Use Python 3.10 or newer (3.11/3.12 recommended). These commands do not require PowerShell activation scripts:
 
