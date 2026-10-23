@@ -1,0 +1,26 @@
+1. Extract the project to a local folder and open PowerShell in that folder.
+
+2. Run once:
+   py -m venv .venv
+   .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+
+3. Open configs\pilot.json in a text editor. Change image_directory to your
+   folder, e.g. D:/Schlieren/Mach2_run01. Keep limit=200 and stride=1.
+
+4. Optional crop:
+   .\.venv\Scripts\python.exe -m schlieren_qml select-roi "D:/Schlieren/Mach2_run01/frame00001.tif"
+   Drag a rectangle, press Enter, copy the printed roi into configs\pilot.json.
+
+5. Run:
+   .\.venv\Scripts\python.exe -m schlieren_qml run configs/pilot.json
+
+6. Inspect results\pilot\figures and the JSON/CSV output tables.
+   Start with mean/RMS, modes, variance spectrum and state-conditional means.
+
+7. After reviewing the pilot, edit configs\full.json and run the same command
+   with configs/full.json. Read README.md for disk requirements and binning.
+
+No experimental frames/results are bundled. No labels are currently available:
+the candidate states are statistical clusters, not established physical regimes.
+The quantum fidelity kernel uses an exact classical simulator. See README.md and
+docs\PAPER_GUIDE.md before interpreting classification scores for a paper.

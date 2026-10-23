@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "schlieren-qml"
+version = "0.1.1"
+description = "Train-only POD and fidelity-kernel SVM feasibility workflow for schlieren sequences"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24,<3", "scipy>=1.10,<2", "scikit-learn>=1.3,<2", "matplotlib>=3.7,<4", "Pillow>=10,<13"]
+
+[project.optional-dependencies]
+qiskit = ["qiskit>=1.2,<3"]
+
+[project.scripts]
+schlieren-qml = "schlieren_qml.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["schlieren_qml*"]
