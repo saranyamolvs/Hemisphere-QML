@@ -1,0 +1,43 @@
+{
+  "image_directory": "C:/YOUR_DATA/hemisphere_run",
+  "pattern": "*",
+  "output_directory": "results/full",
+  "fps": 51032.0,
+  "mach": 2.0,
+  "stagnation_pressure_psia": 20.0,
+  "roi": null,
+  "bin_factor": 2,
+  "start": 0,
+  "limit": 20000,
+  "stride": 1,
+  "rank": 24,
+  "batch_size": 32,
+  "oversampling": 8,
+  "power_iterations": 1,
+  "seed": 42,
+  "train_fraction": 0.6,
+  "validation_fraction": 0.2,
+  "gap_frames": 128,
+  "labels_csv": null,
+  "classify": true,
+  "classifier": {
+    "n_features": 4,
+    "n_clusters": 3,
+    "max_train": 256,
+    "max_validation": 128,
+    "max_test": 256,
+    "C_values": [0.1, 1.0, 10.0],
+    "gamma_values": [0.1, 1.0, "scale"],
+    "reps": [1, 2],
+    "entanglement": "linear",
+    "seed": 42
+  },
+  "figures": {
+    "dpi": 600,
+    "n_modes_plot": 4,
+    "psd_nperseg": 2048,
+    "pixel_size_mm": null,
+    "hemisphere_diameter_mm": null,
+    "Uinf": null
+  }
+}
