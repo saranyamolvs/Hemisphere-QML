@@ -80,6 +80,13 @@ Generated under `results/pilot/figures/` after you run your images:
 
 ## Key numeric outputs
 
+For stronger or adjustable mode-shape contrast, use the notebook's saved-mode
+recoloring section. `replot_spatial_modes(results_folder, vmax=0.01)` tries a
+shared ±0.01 display range without refitting POD or opening the image cache.
+Alternatively use `vmax=None, percentile=99.5`. The saved color-scale JSON
+reports saturation; original modes and their variance fractions are preserved.
+See the Anaconda guide for the full example and output locations.
+
 - `frames.json`: selected filenames, natural-order indices, assumed times and intensity diagnostics.
 - `image_matrix.npy`: disk-backed preprocessed image matrix. This is the main disk cost.
 - `pod_model.npz`: training mean, unit-normalized modes, singular values and variance fractions.

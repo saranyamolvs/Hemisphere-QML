@@ -98,6 +98,36 @@ or a reliable performance comparison. The state labels are candidate clusters,
 not independently validated physical flow regimes. The quantum kernel uses an
 exact classical simulator.
 
+## Adjust an existing mode-shape colorbar
+
+Use the notebook's **Adjust the colorbar of already saved mode shapes** section.
+Run the setup and imports cells, then set `RESULTS_DIRECTORY` in the recoloring
+cell to your saved run folder. You do not need to run the image-processing cells
+again. The helper needs only `pod_model.npz`, `frames.json`, and
+`config_used.json`; it does not open the image matrix or original TIFFs.
+
+```python
+from schlieren_qml.notebook import replot_spatial_modes, display_saved_figures
+
+adjusted = replot_spatial_modes(
+    RESULTS_DIRECTORY, vmax=0.01, n_modes=4, dpi=600
+)
+display_saved_figures(adjusted)
+```
+
+This uses one shared linear range from -0.01 to +0.01, with zero at the neutral
+color. Treat 0.01 as a display trial rather than a universal setting. To use a
+pooled absolute-amplitude percentile, use `vmax=None, percentile=99.5` instead.
+Set at most one of the two limit options. Leaving both as None uses the full
+data range. Never infer additional resolved variance from stronger colors.
+
+Color clipping is recorded per mode in
+`04_spatial_modes_color_scale.json` and indicated by the colorbar's end arrows.
+The data, modal coefficients and variance fractions are unchanged. Adjusted
+PDF/SVG/PNG files go into `figures/mode_color_adjusted`, preserving the original
+mode figure. For future complete runs, the parameters cell also exposes
+`MODE_COLOR_VMAX` and `MODE_COLOR_PERCENTILE`.
+
 ## Move to the full record
 
 The full-record section is disabled by default through `RUN_FULL = False`.

@@ -150,3 +150,25 @@ def display_saved_figures(manifest, names=None, width=950):
             display(Image(filename=str(path), width=width))
             count += 1
     return count
+
+
+def replot_spatial_modes(results_directory, *, vmax=None, percentile=None, n_modes=4, dpi=600):
+    """Adjust a saved POD mode figure without reading images or refitting POD.
+
+    Exports go into ``figures/mode_color_adjusted`` so the original figure and
+    numerical results are preserved. Limits apply only to the displayed colors.
+    """
+    from .pod import load_pod
+    from .figures import plot_spatial_modes
+
+    results = Path(results_directory).expanduser().resolve()
+    model = load_pod(results/"pod_model.npz")
+    metadata = json.loads((results/"frames.json").read_text(encoding="utf-8"))
+    saved_config = json.loads((results/"config_used.json").read_text(encoding="utf-8"))
+    config = dict(saved_config.get("figures", {}))
+    config.update(n_modes_plot=n_modes, dpi=dpi, bin_factor=metadata.get("bin_factor", 1),
+                  mode_color_vmax=vmax, mode_color_percentile=percentile)
+    destination = results/"figures"/"mode_color_adjusted"
+    paths = plot_spatial_modes(model, tuple(metadata["image_shape"]), destination, config=config)
+    scale = json.loads((destination/"04_spatial_modes_color_scale.json").read_text(encoding="utf-8"))
+    return {"figures": paths, "color_scale": scale, "output_directory": str(destination)}

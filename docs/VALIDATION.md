@@ -4,7 +4,7 @@ Verified in the attached Linux environment using Python 3.12.14. No user
 experimental images were available. The Windows interactive crop window still
 requires a check on the user's computer.
 
-- **52 unittest cases: 51 passed, one optional Qiskit equivalence check skipped**
+- **56 unittest cases: 55 passed, one optional Qiskit equivalence check skipped**
   because Qiskit was unavailable. The mandatory NumPy quantum map was checked
   against independent explicit gate matrices and an analytic fidelity result.
 - A complete CLI run processed **200 native 768×512, 16-bit TIFF software-test
@@ -43,6 +43,11 @@ requires a check on the user's computer.
 - Notebook helper tests check kernel-interpreter reuse, partial results,
   output-folder protection, path resolution and interruption cleanup. The
   actual Anaconda Navigator / Windows notebook interface remains untested here.
+- The saved-mode recoloring path was executed in a real Jupyter kernel using a
+  software-fixture POD model. It exported a shared ±0.01 scale without opening
+  the raw images or image cache. The saved POD file hash was unchanged. Tests
+  check shared symmetric limits, pooled-percentile selection, reported clipping
+  fractions, invalid options, and preservation of original result files.
 
 Temporary software fixtures and their plots are excluded from the source ZIP.
 Full experimental validation still requires checking actual TIFF ordering,

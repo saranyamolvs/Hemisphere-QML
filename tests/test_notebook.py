@@ -8,10 +8,37 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from schlieren_qml.notebook import resolve_notebook_config, run_from_notebook
+from schlieren_qml.notebook import resolve_notebook_config, run_from_notebook, replot_spatial_modes
 
 
 class NotebookHelperTests(unittest.TestCase):
+    def test_saved_mode_recoloring_uses_no_images_and_preserves_original_results(self):
+        import numpy as np
+        from schlieren_qml.pod import fit_pod
+
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            rng = np.random.default_rng(32)
+            matrix = rng.normal(size=(12, 6))
+            model = fit_pod(matrix, np.arange(8), rank=2)
+            model.save(folder/"pod_model.npz")
+            (folder/"frames.json").write_text(json.dumps({"image_shape": [2, 3], "bin_factor": 2}))
+            (folder/"config_used.json").write_text(json.dumps({"figures": {"pixel_size_mm": 0.2}}))
+            originals = {name: (folder/name).read_bytes() for name in ("pod_model.npz", "frames.json", "config_used.json")}
+            (folder/"figures").mkdir()
+            original_plot = folder/"figures/04_spatial_modes.png"
+            original_plot.write_bytes(b"original figure")
+            with patch("schlieren_qml.data.read_image", side_effect=AssertionError("Raw image was opened")), patch("subprocess.Popen") as process:
+                result = replot_spatial_modes(folder, vmax=0.1, n_modes=2, dpi=40)
+            process.assert_not_called()
+            self.assertEqual(len(result["figures"]), 3)
+            self.assertTrue(all(Path(path).is_file() for path in result["figures"]))
+            self.assertTrue(all("mode_color_adjusted" in Path(path).parts for path in result["figures"]))
+            self.assertTrue(result["color_scale"])
+            for name, content in originals.items():
+                self.assertEqual((folder/name).read_bytes(), content)
+            self.assertEqual(original_plot.read_bytes(), b"original figure")
+
     def project(self, root):
         project = root/"project with spaces"
         (project/"schlieren_qml").mkdir(parents=True)
