@@ -94,7 +94,7 @@ def _validate_config(cfg):
     figures = cfg.get("figures", {})
     if not isinstance(figures, dict):
         raise ValueError("figures must be a JSON object.")
-    figure_keys = {"dpi", "figure_dpi", "n_modes_plot", "psd_nperseg", "acf_max_lag", "pixel_size_mm", "hemisphere_diameter_mm", "Uinf"}
+    figure_keys = {"dpi", "figure_dpi", "n_modes_plot", "psd_nperseg", "acf_max_lag", "pixel_size_mm", "hemisphere_diameter_mm", "Uinf", "mode_color_vmax", "mode_color_percentile"}
     if set(figures)-figure_keys:
         raise ValueError(f"Unknown figures keys: {', '.join(sorted(set(figures)-figure_keys))}")
     for key in ("dpi", "figure_dpi", "n_modes_plot", "acf_max_lag"):
@@ -105,6 +105,13 @@ def _validate_config(cfg):
     for key in ("pixel_size_mm", "hemisphere_diameter_mm", "Uinf"):
         if figures.get(key) is not None:
             positive(figures[key], f"figures.{key}")
+    for key in ("mode_color_vmax", "mode_color_percentile"):
+        if figures.get(key) is not None:
+            positive(figures[key], f"figures.{key}")
+    if figures.get("mode_color_percentile") is not None and figures["mode_color_percentile"] > 100:
+        raise ValueError("figures.mode_color_percentile must be greater than zero and at most 100.")
+    if figures.get("mode_color_vmax") is not None and figures.get("mode_color_percentile") is not None:
+        raise ValueError("Set only one of figures.mode_color_vmax and figures.mode_color_percentile.")
     classifier = cfg.get("classifier", {})
     if not isinstance(classifier, dict):
         raise ValueError("classifier must be a JSON object.")
@@ -282,7 +289,7 @@ def run(config_path, overwrite=False):
         if (out / "figures").is_dir():
             for file in (out / "figures").iterdir():
                 if file.is_file() and (file.name == "FIGURE_NOTES.md" or
-                    (re.match(r"^\d{2}_[a-z_]+\.", file.name) and file.suffix in {".png", ".svg", ".pdf", ".csv", ".npz"})):
+                    (re.match(r"^\d{2}_[a-z_]+\.", file.name) and file.suffix in {".png", ".svg", ".pdf", ".csv", ".npz", ".json", ".md"})):
                     file.unlink()
     write_json(out / "config_used.json", cfg)
     started = time.perf_counter()

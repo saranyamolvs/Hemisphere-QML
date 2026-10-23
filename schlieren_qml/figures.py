@@ -8,6 +8,8 @@ spatial information. No experimental data are synthesized in this module.
 from __future__ import annotations
 
 import csv
+import json
+from numbers import Real
 import textwrap
 from pathlib import Path
 from typing import Any
@@ -140,6 +142,126 @@ def plot_roi(image, roi, output_dir, config=None) -> list[str]:
         return _save(fig, Path(output_dir), "01_selected_region", dpi)
 
 
+def _mode_color_options(config):
+    """Validate display-only color limits before rendering or writing files."""
+    limit = config.get("mode_color_vmax")
+    percentile = config.get("mode_color_percentile")
+    for key, value in (("mode_color_vmax", limit), ("mode_color_percentile", percentile)):
+        if value is not None and (isinstance(value, (bool, np.bool_)) or not isinstance(value, Real)
+                                  or not np.isfinite(value) or value <= 0):
+            raise ValueError(f"{key} must be null or a positive finite number.")
+    if percentile is not None and percentile > 100:
+        raise ValueError("mode_color_percentile must be greater than zero and at most 100.")
+    if limit is not None and percentile is not None:
+        raise ValueError("Set only one of mode_color_vmax and mode_color_percentile.")
+    return limit, percentile
+
+
+def _mode_scale_note(scale):
+    clipped = ", ".join(f"mode {row['mode']}: {100*row['fraction_clipped']:.3g}%"
+                         for row in scale["per_mode"])
+    return (
+        f"04: Spatial POD modes share one symmetric, zero-centered diverging scale "
+        f"[{scale['vmin']:.8g}, {scale['vmax']:.8g}], selected by {scale['source']}. "
+        "Color saturation changes the display only; stored spatial modes are not rescaled or clipped. "
+        f"Displayed pixels beyond the limits: {clipped}. Triangular colorbar extensions mark "
+        "out-of-range values when present. Mode signs are arbitrary; near-degenerate modes may "
+        "rotate within their subspace. Mode normalization depends on the ROI and spatial resolution, "
+        "so numeric amplitudes should not be compared across different crops/binning without accounting "
+        "for that normalization. Exact limits and saturation fractions are saved in "
+        "04_spatial_modes_color_scale.json."
+    )
+
+
+def plot_spatial_modes(pod_model, image_shape, output_dir, config=None) -> list[str]:
+    """Render saved POD modes with a shared symmetric display color scale.
+
+    ``mode_color_vmax`` sets explicit limits [-vmax,+vmax]. Alternatively,
+    ``mode_color_percentile`` chooses that limit from pooled absolute entries
+    of all displayed modes. With both unset, the complete data range is used.
+    Neither option modifies modes, coefficients, POD variance, or classifiers.
+    """
+    config = dict(config or {})
+    manual_limit, percentile = _mode_color_options(config)
+    dpi = _positive_integer(config.get("dpi", config.get("figure_dpi", 600)), "dpi")
+    requested = _positive_integer(config.get("n_modes_plot", 4), "n_modes_plot")
+    shape = tuple(image_shape)
+    if len(shape) != 2 or any(isinstance(value, (bool, np.bool_)) or
+                              not isinstance(value, (int, np.integer)) or value < 1 for value in shape):
+        raise ValueError("image_shape must contain two positive integers.")
+    all_modes = np.asarray(pod_model.modes)
+    fractions = np.asarray(pod_model.energy_fraction, dtype=float)
+    if all_modes.ndim != 2 or not len(all_modes) or all_modes.shape[1] != np.prod(shape):
+        raise ValueError("POD modes must be a nonempty mode-by-pixel array matching image_shape.")
+    if np.iscomplexobj(all_modes) or not np.isfinite(all_modes).all():
+        raise ValueError("POD spatial modes must contain finite real values.")
+    if (fractions.shape != (len(all_modes),) or not np.isfinite(fractions).all()
+            or np.any(fractions < 0) or fractions.sum() > 1+1e-6):
+        raise ValueError("POD variance fractions must be finite, nonnegative and total at most one.")
+    count = min(requested, len(all_modes))
+    # This is a view used only by plotting; no normalization or in-place clipping.
+    modes = all_modes[:count].reshape(count, *shape)
+    full_limit = float(np.max(np.abs(modes)))
+    if manual_limit is not None:
+        limit, source = float(manual_limit), "manual shared limit"
+    elif percentile is not None:
+        limit = float(np.percentile(np.abs(modes), percentile))
+        source = f"pooled absolute-value percentile {float(percentile):g}"
+        if limit <= 0 and full_limit > 0:
+            raise ValueError("Selected mode_color_percentile gives a zero limit; choose a higher percentile or positive mode_color_vmax.")
+    else:
+        limit, source = full_limit, "full displayed-mode range"
+    if limit == 0:
+        limit = 1.0
+        source += " (all-zero display fallback)"
+    extent, unit = _extent(shape, config)
+    below, above = bool(np.any(modes < -limit)), bool(np.any(modes > limit))
+    extend = "both" if below and above else "min" if below else "max" if above else "neither"
+    scale = {
+        "vmin": -limit, "vmax": limit, "center": 0.0, "source": source,
+        "requested_mode_color_vmax": None if manual_limit is None else float(manual_limit),
+        "requested_mode_color_percentile": None if percentile is None else float(percentile),
+        "shared_across_modes": True, "displayed_mode_count": count,
+        "pooled_pixel_count": int(modes.size), "full_absolute_max": full_limit,
+        "colorbar_extend": extend, "display_only": True,
+        "stored_mode_values_modified": False,
+        "per_mode": [{"mode": index+1, "data_min": float(mode.min()), "data_max": float(mode.max()),
+                      "fraction_clipped": float(np.mean(np.abs(mode) > limit)),
+                      "fraction_below_limit": float(np.mean(mode < -limit)),
+                      "fraction_above_limit": float(np.mean(mode > limit))}
+                     for index, mode in enumerate(modes)],
+    }
+    ncols = min(count, 2)
+    nrows = int(np.ceil(count/ncols))
+    width = 7.2 if ncols == 2 else 3.7
+    # Match row height to the data aspect; compressed layout removes the large
+    # empty bands produced by fixed-aspect images in a fixed-height subplot grid.
+    panel_width = max((width-1.25-.35*(ncols-1))/ncols, .7)
+    height = nrows*(panel_width*shape[0]/shape[1]+.62)
+    directory = Path(output_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    with plt.rc_context(STYLE):
+        fig, axes = plt.subplots(nrows, ncols, figsize=(width, height),
+                                 squeeze=False, layout="compressed")
+        active = []
+        for index, ax in enumerate(axes.flat):
+            if index >= count:
+                ax.set_visible(False)
+                continue
+            image = _image(ax, modes[index], extent, unit,
+                           title=f"Mode {index+1} ({100*fractions[index]:.2f}%)",
+                           cmap="RdBu_r", vmin=-limit, vmax=limit)
+            active.append(ax)
+        fig.colorbar(image, ax=active, shrink=.95, extend=extend,
+                     ticks=np.linspace(-limit, limit, 5),
+                     format=FuncFormatter(lambda value, position: f"{value:.3g}"),
+                     label="Unit-normalized spatial mode (dimensionless)")
+        paths = _save(fig, directory, "04_spatial_modes", dpi)
+    (directory/"04_spatial_modes_color_scale.json").write_text(json.dumps(scale, indent=2, allow_nan=False), encoding="utf-8")
+    (directory/"04_spatial_modes_notes.md").write_text(_mode_scale_note(scale)+"\n", encoding="utf-8")
+    return paths
+
+
 def make_figures(X, image_shape, pod_model, scores, times_s, train_indices,
                  output_dir, metadata, classification=None, config=None) -> list[str]:
     """Export measured-image, POD, spectrum, reconstruction, and classifier figures.
@@ -152,6 +274,7 @@ def make_figures(X, image_shape, pod_model, scores, times_s, train_indices,
     config = dict(config or {})
     for key in ("bin_factor", "stride"):
         config.setdefault(key, metadata.get(key, 1))
+    _mode_color_options(config)
     directory = Path(output_dir)
     dpi = _positive_integer(config.get("dpi", config.get("figure_dpi", 600)), "dpi")
     batch_size = _positive_integer(config.get("batch_size", 64), "batch_size")
@@ -236,24 +359,9 @@ def make_figures(X, image_shape, pod_model, scores, times_s, train_indices,
         notes.append("03: POD variance is normalized by the total centered training-image variance, "
                      "including unresolved modes. It is an image-intensity statistic, not flow kinetic energy.")
 
-        modes = np.asarray(pod_model.modes[:n_modes]).reshape(n_modes, *image_shape)
-        vmax = float(np.max(np.abs(modes))) or 1
-        ncols = min(n_modes, 2)
-        nrows = int(np.ceil(n_modes / ncols))
-        fig, axes = plt.subplots(nrows, ncols, figsize=(7.2, 2.9*nrows),
-                                 squeeze=False, layout="constrained")
-        im = None
-        for j, ax in enumerate(axes.flat):
-            if j >= n_modes:
-                ax.set_visible(False)
-                continue
-            im = _image(ax, modes[j], extent, unit, title=f"Mode {j+1} ({100*fraction[j]:.2f}%)",
-                        cmap="RdBu_r", vmin=-vmax, vmax=vmax)
-        fig.colorbar(im, ax=list(axes.flat[:n_modes]), shrink=0.85,
-                     label="Unit-normalized spatial mode (dimensionless)")
-        paths += _save(fig, directory, "04_spatial_modes", dpi)
-        notes.append("04: Spatial POD modes share one symmetric diverging scale. Mode signs are arbitrary; "
-                     "near-degenerate modes may rotate within their subspace.")
+        paths += plot_spatial_modes(pod_model, image_shape, directory, config)
+        scale = json.loads((directory/"04_spatial_modes_color_scale.json").read_text(encoding="utf-8"))
+        notes.append(_mode_scale_note(scale))
 
         fig, axes = plt.subplots(n_modes, 1, figsize=(7.2, 1.45*n_modes+0.4),
                                  sharex=True, squeeze=False, layout="constrained")

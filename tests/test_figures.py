@@ -1,5 +1,6 @@
 """Regression checks on quantitative figure sources, without expensive exports."""
 import csv
+import json
 import os
 import subprocess
 import sys
@@ -103,6 +104,60 @@ class FigureSourceTests(unittest.TestCase):
                 rows=list(csv.DictReader(stream))
             self.assertEqual([(r["partition"],r["kernel_example_index"],r["filename"]) for r in rows],
                              [("train","0","f0.tif"),("train","1","f2.tif"),("train","2","f4.tif"),("test","0","f7.tif")])
+
+    def test_manual_mode_scale_is_shared_symmetric_and_does_not_modify_modes(self):
+        modes = np.array([[1.,-1.,0.,0.],[0.,0.,1.,-1.]])/np.sqrt(2)
+        original = modes.copy()
+        model = SimpleNamespace(modes=modes,energy_fraction=np.array([.5,.5]))
+        checked = []
+        def inspect_and_close(fig,directory,name,dpi):
+            image_axes = [ax for ax in fig.axes if ax.images]
+            self.assertEqual(len(image_axes),2)
+            for ax in image_axes:
+                self.assertEqual(ax.images[0].get_clim(),(-.2,.2))
+                np.testing.assert_array_equal(ax.images[0].get_array(),original[len(checked)%2].reshape(2,2))
+                checked.append(True)
+            np.testing.assert_allclose(fig.axes[-1].get_yticks(),[-.2,-.1,0,.1,.2])
+            self.assertEqual(fig.axes[-1].get_ylim(),(-.2,.2))
+            figures.plt.close(fig)
+            return []
+        with tempfile.TemporaryDirectory() as tmp,patch.object(figures,"_save",side_effect=inspect_and_close):
+            figures.plot_spatial_modes(model,(2,2),tmp,{"mode_color_vmax":.2})
+            scale=json.loads((Path(tmp)/"04_spatial_modes_color_scale.json").read_text())
+            self.assertEqual(scale["colorbar_extend"],"both")
+            self.assertEqual(scale["per_mode"][0]["fraction_clipped"],.5)
+            self.assertTrue(scale["display_only"])
+        np.testing.assert_array_equal(modes,original)
+        self.assertEqual(len(checked),2)
+
+    def test_percentile_mode_scale_uses_the_pool_of_all_displayed_modes(self):
+        values=np.arange(-10.,10.).reshape(2,10)
+        model=SimpleNamespace(modes=values,energy_fraction=np.array([.6,.3]))
+        with tempfile.TemporaryDirectory() as tmp,patch.object(figures,"_save",side_effect=_close_without_export):
+            figures.plot_spatial_modes(model,(2,5),tmp,{"mode_color_percentile":80})
+            scale=json.loads((Path(tmp)/"04_spatial_modes_color_scale.json").read_text())
+            self.assertAlmostEqual(scale["vmax"],np.percentile(np.abs(values),80))
+            self.assertEqual(scale["pooled_pixel_count"],20)
+            self.assertEqual(scale["displayed_mode_count"],2)
+            self.assertEqual(scale["vmin"],-scale["vmax"])
+
+    def test_invalid_mode_scales_fail_before_any_export_and_cli_accepts_valid_options(self):
+        from schlieren_qml.cli import _validate_config
+        X,model,scores,times,metadata=self.fixture()
+        invalid=[{"mode_color_vmax":0},{"mode_color_vmax":float("nan")},
+                 {"mode_color_vmax":True},{"mode_color_percentile":101},
+                 {"mode_color_percentile":0},{"mode_color_vmax":.1,"mode_color_percentile":99}]
+        for options in invalid:
+            with self.subTest(options=options),tempfile.TemporaryDirectory() as tmp:
+                with self.assertRaises(ValueError):
+                    figures.plot_spatial_modes(model,(2,2),tmp,options)
+                with self.assertRaises(ValueError):
+                    figures.make_figures(X,(2,2),model,scores,times,np.arange(100),tmp,metadata,config=options)
+                self.assertEqual(list(Path(tmp).iterdir()),[])
+                with self.assertRaises(ValueError):
+                    _validate_config({"image_directory":"images","output_directory":"results","figures":options})
+        _validate_config({"image_directory":"images","output_directory":"results",
+                          "figures":{"mode_color_vmax":.01,"mode_color_percentile":None}})
 
 
 if __name__=="__main__":
