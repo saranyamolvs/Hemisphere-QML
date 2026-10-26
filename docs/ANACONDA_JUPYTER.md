@@ -130,42 +130,19 @@ run needs a fresh output directory or the explicit overwrite setting. To study
 an existing run without repeating image processing, use the validation-only
 section below.
 
-## Adjust an existing mode-shape colorbar
+## Fixed color limits for the original mode figure
 
-Use the notebook's **Adjust the colorbar of already saved mode shapes** section.
-Run the setup and imports cells, then set `RESULTS_DIRECTORY` in the recoloring
-cell to your saved run folder. You do not need to run the image-processing cells
-again. The helper needs only `pod_model.npz`, `frames.json`, and
-`config_used.json`; it does not open the image matrix or original TIFFs.
+Set `MODE_COLOR_VMAX = 0.008` and `MODE_COLOR_PERCENTILE = None` in the
+parameters cell. Pilot and full processing save the original
+`figures/04_spatial_modes.png` with the shared range -0.008 to +0.008.
+There is no separate recoloring cell or adjusted-image folder in this workflow.
 
-```python
-from schlieren_qml.notebook import replot_spatial_modes, display_saved_figures
-
-adjusted = replot_spatial_modes(
-    RESULTS_DIRECTORY, vmax=MODE_COLOR_VMAX,
-    percentile=MODE_COLOR_PERCENTILE, n_modes=4, dpi=FIGURE_DPI
-)
-display_saved_figures(adjusted)
-```
-
-Run the setup, imports, and parameters cells before the recoloring cell. Set
-`MODE_COLOR_VMAX = 0.008` and `MODE_COLOR_PERCENTILE = None` in the parameters
-cell to fix one shared linear range from -0.008 to +0.008. The same parameters
-control pilot runs, full runs, and saved-mode recoloring; there is no separate
-recoloring limit. Rerun the parameters cell after changing either value.
-
-To use a pooled absolute-amplitude percentile, set `MODE_COLOR_VMAX = None`
-and `MODE_COLOR_PERCENTILE = 99.5` in the parameters cell instead. Set at most
-one limit option. Leaving both as None uses the largest absolute pixel value
-across all displayed modes. The appropriate scale depends on the modes, crop,
-and binning. Never infer additional resolved variance from stronger colors.
-
-Color clipping is recorded per mode in
-`04_spatial_modes_color_scale.json` and indicated by the colorbar's end arrows.
-The data, modal coefficients and variance fractions are unchanged. Adjusted
-PDF/SVG/PNG files go into `figures/mode_color_adjusted`, preserving the original
-mode figure. To recolor existing results, run only setup/imports, parameters,
-and the recoloring cell; no POD or classification rerun is required.
+To update an existing run, set `REVIEW_RESULTS_DIRECTORY` to its saved folder,
+then run setup/imports, parameters, and the normal figure-display cell. That
+cell regenerates the original mode figure and its PDF/SVG versions in place
+from the saved POD model. It does not read TIFFs or refit POD. Mode values,
+coefficients, and variance fractions are unchanged. Color saturation is recorded
+in `figures/04_spatial_modes_color_scale.json`.
 
 ## Move to the full record
 

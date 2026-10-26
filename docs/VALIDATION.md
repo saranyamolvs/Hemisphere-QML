@@ -36,10 +36,10 @@ requires a check on the user's computer.
   target folder, and its module CLI launched outside the source tree.
 - The expanded Anaconda notebook was validated with nbformat and executed
   top-to-bottom using nbclient and a real Python Jupyter kernel on a private
-  150-frame, 32×48, 16-bit synthetic TIFF fixture. All 14 source code cells
+  150-frame, 32×48, 16-bit synthetic TIFF fixture. All 13 source code cells
   passed with pilot/full processing and the optional validation study enabled.
   Checks covered both classifier parameter paths, grouped candidate images,
-  single-file inspection, CSV-list export, saved-mode recoloring, and frozen-label
+  single-file inspection, CSV-list export, original mode-figure updates, and frozen-label
   learning curves. Source notebooks retain no fixture outputs; full processing
   and the validation study remain disabled by default for normal Run All.
 - Notebook helper tests check kernel-interpreter reuse, partial results,
@@ -75,3 +75,9 @@ Full experimental validation still requires checking actual TIFF ordering,
 camera timing/dropouts, spatial calibration, POD/state convergence, physical
 interpretation and repeat-run generalization. No experimental performance or
 quantum advantage is claimed by these software checks.
+
+The original mode figure was regenerated in place with fixed limits ±0.008
+through the normal notebook figure-display cell. Existing-result checks used
+the selected full-run directory, preserved fitted model bytes, and created no
+separate adjusted-image folder. The combined figure notes and scale metadata
+are refreshed with the applied display limits.
