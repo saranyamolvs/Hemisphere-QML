@@ -110,23 +110,30 @@ again. The helper needs only `pod_model.npz`, `frames.json`, and
 from schlieren_qml.notebook import replot_spatial_modes, display_saved_figures
 
 adjusted = replot_spatial_modes(
-    RESULTS_DIRECTORY, vmax=0.01, n_modes=4, dpi=600
+    RESULTS_DIRECTORY, vmax=MODE_COLOR_VMAX,
+    percentile=MODE_COLOR_PERCENTILE, n_modes=4, dpi=FIGURE_DPI
 )
 display_saved_figures(adjusted)
 ```
 
-This uses one shared linear range from -0.01 to +0.01, with zero at the neutral
-color. Treat 0.01 as a display trial rather than a universal setting. To use a
-pooled absolute-amplitude percentile, use `vmax=None, percentile=99.5` instead.
-Set at most one of the two limit options. Leaving both as None uses the full
-data range. Never infer additional resolved variance from stronger colors.
+Run the setup, imports, and parameters cells before the recoloring cell. Set
+`MODE_COLOR_VMAX = 0.008` and `MODE_COLOR_PERCENTILE = None` in the parameters
+cell to fix one shared linear range from -0.008 to +0.008. The same parameters
+control pilot runs, full runs, and saved-mode recoloring; there is no separate
+recoloring limit. Rerun the parameters cell after changing either value.
+
+To use a pooled absolute-amplitude percentile, set `MODE_COLOR_VMAX = None`
+and `MODE_COLOR_PERCENTILE = 99.5` in the parameters cell instead. Set at most
+one limit option. Leaving both as None uses the largest absolute pixel value
+across all displayed modes. The appropriate scale depends on the modes, crop,
+and binning. Never infer additional resolved variance from stronger colors.
 
 Color clipping is recorded per mode in
 `04_spatial_modes_color_scale.json` and indicated by the colorbar's end arrows.
 The data, modal coefficients and variance fractions are unchanged. Adjusted
 PDF/SVG/PNG files go into `figures/mode_color_adjusted`, preserving the original
-mode figure. For future complete runs, the parameters cell also exposes
-`MODE_COLOR_VMAX` and `MODE_COLOR_PERCENTILE`.
+mode figure. To recolor existing results, run only setup/imports, parameters,
+and the recoloring cell; no POD or classification rerun is required.
 
 ## Move to the full record
 
