@@ -679,7 +679,8 @@ def _classification_figures(result, directory, dpi, notes, metadata=None):
     available = [(key, name) for key, name in names if key in result.get("confusion", {})]
     if available:
         source_rows = []
-        fig, axes = plt.subplots(1, len(available), figsize=(7.2, 3.2), squeeze=False, layout="constrained")
+        sample_counts = []
+        fig, axes = plt.subplots(1, len(available), figsize=(7.2, 3.9), squeeze=False, layout="constrained")
         for ax, (key, title) in zip(axes.flat, available):
             counts = np.asarray(result["confusion"][key], dtype=int)
             raw_counts = np.asarray(result["confusion"][key])
@@ -688,32 +689,49 @@ def _classification_figures(result, directory, dpi, notes, metadata=None):
                 raise ValueError("Confusion matrices must contain nonnegative integer counts in a square array.")
             denom = counts.sum(axis=1, keepdims=True)
             normal = np.divide(counts, denom, out=np.zeros_like(counts, dtype=float), where=denom>0)
+            sample_counts.append(int(counts.sum()))
+            observed = denom[:, 0] > 0
+            balanced = float(np.mean(np.diag(normal)[observed])) if np.any(observed) else None
             im = ax.imshow(normal, vmin=0, vmax=1, cmap="Blues", aspect="equal")
             classes = result.get("metrics", {}).get("classes", np.unique(result["labels"]).tolist())
             if len(classes) != len(counts):
                 plt.close(fig)
                 raise ValueError("Confusion matrix dimensions must match the declared class names.")
             tick_labels = [
-                ("Candidate\n"+str(c).removeprefix("candidate_")) if str(c).startswith("candidate_")
+                ("Candidate "+str(c).removeprefix("candidate_")) if str(c).startswith("candidate_")
                 else textwrap.fill(str(c).replace("_", " "), width=12)
                 for c in classes
             ]
             ax.set_xticks(range(len(counts)), tick_labels)
-            ax.set_yticks(range(len(counts)), [str(c) for c in classes])
+            ax.set_yticks(range(len(counts)), tick_labels)
             for i in range(len(counts)):
                 for j in range(len(counts)):
-                    label = f"{100*normal[i,j]:.0f}%\n(n={counts[i,j]})" if denom[i,0]>0 else "No test\nsamples"
+                    label = f"{100*normal[i,j]:.1f}%\n(n={counts[i,j]})" if denom[i,0]>0 else "No test\nsamples"
                     ax.text(j, i, label, ha="center", va="center", color="white" if normal[i,j]>.55 else "0.15", fontsize=8)
                     source_rows.append((key, str(classes[i]), str(classes[j]), int(counts[i,j]),
                                         int(denom[i,0]), float(normal[i,j]) if denom[i,0] else None))
-            ax.set(xlabel="Predicted state", ylabel="Reference state", title=title)
+            performance = f"Balanced accuracy: {100*balanced:.1f}%" if balanced is not None else "Balanced accuracy: undefined"
+            ax.set(xlabel="Predicted state", ylabel="Reference state", title=f"{title}\n{performance}")
+        label_mode = result.get("label_mode", result.get("metrics", {}).get("label_mode"))
+        if label_mode == "cluster-surrogate":
+            label_source = "training-defined K-means assignments"
+        elif label_mode == "external":
+            label_source = "external labels"
+        else:
+            label_source = "source not specified"
+        sample_description = (f"N = {sample_counts[0]} held-out test examples" if len(set(sample_counts)) == 1
+                              else "; ".join(f"{title}: N = {count}" for (_, title), count in zip(available, sample_counts)))
+        fig.suptitle(f"{sample_description}\nReference labels: {label_source}", fontsize=9)
         fig.colorbar(im, ax=list(axes.flat), shrink=0.8, label="Fraction within reference state")
         paths += _save(fig, directory, "09_confusion_matrices", dpi)
         _csv(directory / "09_confusion_matrices.csv", ["model", "reference_state", "predicted_state",
              "count", "reference_support", "fraction_within_reference"], source_rows)
-        notes.append("09: Held-out confusion matrices are row-normalized; raw counts are printed in every cell. "
-                     "Absent reference states have no test evidence. Reference labels can be cluster surrogates; "
-                     "check classification metrics for the label source.")
+        notes.append(f"09: {sample_description}. Reference labels: {label_source}. "
+                     "Held-out confusion matrices are row-normalized; raw counts are printed in every cell. "
+                     "Percentages are rounded to one decimal place and may not sum to exactly 100%. "
+                     "Balanced accuracy is mean recall over reference states with test support. "
+                     "Absent reference states have no test evidence. Cluster assignments are surrogate "
+                     "targets rather than independent physical flow-state ground truth.")
     kernels = result.get("kernels", {})
     if "train" in kernels:
         matrix = np.asarray(kernels["train"])

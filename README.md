@@ -19,7 +19,8 @@ If packages are missing, the notebook can install them into its active kernel
 with `%pip install -r requirements.txt`; restart the kernel afterward. For a
 dedicated Conda environment, use the supplied `environment.yml`. See
 [`docs/ANACONDA_JUPYTER.md`](docs/ANACONDA_JUPYTER.md) for step-by-step setup,
-Windows path examples, kernel troubleshooting and the optional full-record run.
+Windows path examples, kernel troubleshooting, the optional full-record run,
+candidate-image inspection, and validation-only studies from saved results.
 
 ## Alternative: run from PowerShell on Windows
 
@@ -51,7 +52,7 @@ Alternatively double-click `run_pilot.bat` after setup. Nonempty output folders 
 2. Create ordered train/validation/test partitions with gaps measured in original camera-frame indices. Defaults are nominal 60/20/20% boundaries before exclusions. The pilot's 10-frame gap is a starting value, not a decorrelation guarantee.
 3. Fit the image mean and randomized spatial POD **only on training frames**. Project the complete record onto this frozen basis. Retained variance uses the exact total centered training-intensity variance as denominator, including the unresolved tail.
 4. Fit a training-only [0, π] angle mapping on the first four modal coefficients. Features constant during training remain at zero angle, and held-out changes in these features are reported separately. With no labels, fit three K-means candidate clusters in that training feature space and assign held-out frames using frozen centers. Both SVMs receive identical features, sampled frames and class weighting.
-5. Tune RBF-SVM C/γ and fidelity-kernel SVM C/circuit repetitions on validation, then evaluate once on test. A majority-class baseline is included. Both final models remain fitted on training only. The quantum kernel is an exact NumPy statevector calculation; no quantum account, hardware or Qiskit installation is needed.
+5. Tune RBF-SVM C/γ and fidelity-kernel SVM C/circuit repetitions/encoding scale on validation, then evaluate once on test. The encoding factor affects only quantum state preparation; the shared base features and candidate assignments remain fixed. A majority-class baseline is included. Both final models remain fitted on training only. The quantum kernel is an exact NumPy statevector calculation; no quantum account, hardware or Qiskit installation is needed.
 6. Save numeric outputs, full settings, software versions, warnings, training autocorrelation, classifier sample indices and figure source tables. Export PDF, SVG and 600-dpi PNG figures. SVG text is editable; PDFs embed TrueType fonts.
 
 **No independent labels are available.** Classifier accuracy currently measures reproduction of a train-defined K-means partition in the same features. Nearest-center assignment defines these labels exactly. High accuracy is not independent evidence of physical flow states, better flow understanding, or quantum advantage. Inspect state-conditional images and state duration, then establish a physical label definition or use independent measurements for stronger classification claims.
@@ -81,8 +82,10 @@ Generated under `results/pilot/figures/` after you run your images:
 ## Key numeric outputs
 
 For stronger or adjustable mode-shape contrast, use the notebook's saved-mode
-recoloring section. `replot_spatial_modes(results_folder, vmax=0.01)` tries a
-shared ±0.01 display range without refitting POD or opening the image cache.
+recoloring section. The notebook parameter `MODE_COLOR_VMAX = 0.008` fixes a
+shared ±0.008 display range for pilot, full, and saved-mode plotting without
+changing the modes. `replot_spatial_modes(results_folder, vmax=0.008)` recolors
+saved modes without refitting POD or opening the image cache.
 Alternatively use `vmax=None, percentile=99.5`. The saved color-scale JSON
 reports saturation; original modes and their variance fractions are preserved.
 See the Anaconda guide for the full example and output locations.
@@ -122,7 +125,39 @@ Edit `configs/full.json` with the same image folder and selected ROI, then run:
 
 The full default uses `bin_factor: 2` to reduce disk cost. This spatial averaging can suppress fine features, so compare it against `bin_factor: 1` on the pilot. Crop width and height must each divide exactly by the bin factor. Full 768×512 images ×20,000 require **31.46 GB** for float32 cache alone; binning by two reduces it to **7.86 GB**. Allow extra space for modes, outputs and filesystem overhead. POD batches and a spatial sketch keep RAM bounded; the record is not loaded as a dense full matrix in RAM, and no 20,000² snapshot matrix is formed. Hardware and BLAS settings affect run time.
 
-Both SVMs default to the same 256 training /128 validation /256 test examples on the full configuration. The complete image record is still used for POD, spectra and diagnostics. Capping the kernel examples controls its quadratic cost; it does not make 20,000-image SVM training free. Four POD features encode four qubits (16 statevector amplitudes). With 256 training samples, the training kernel contains 65,536 entries. The two circuit repetition settings have distinct validation searches. Timings describe this classical simulation, not hardware speed or asymptotic advantage.
+Both SVMs default to the same 512 training /512 validation /256 test examples on the full configuration. The complete image record is still used for POD, spectra and diagnostics. These classifier caps are separate from the image-processing limit. Capping the kernel examples controls its quadratic cost; it does not make 20,000-image SVM training free. Four POD features encode four qubits (16 statevector amplitudes). With 512 training samples, the training kernel contains 262,144 entries. The full default searches encoding factors `[0.1, 0.25, 0.5, 1.0]` and two circuit repetition settings on validation. Timings describe this classical simulation, not hardware speed or asymptotic advantage.
+
+## Inspect candidate images and compare classifier settings
+
+The notebook's saved-results section reads `state_assignments.csv` to show TIFF
+images grouped by candidate, with filenames, times, and partitions. It defaults
+to training images, uses the saved crop/binning, and shares grayscale limits
+across panels. Choose another seed, one candidate, a particular filename, or
+original TIFF pixels. Candidate-list export writes one CSV per group without
+duplicating images. SVM prediction galleries use only nonblank evaluated test
+predictions and retain the reference assignment for comparison.
+
+Set `REVIEW_RESULTS_DIRECTORY` to the completed run. Image inspection requires
+the original TIFFs; `IMAGE_DIRECTORY_OVERRIDE` supports a relocated image
+folder. Neither viewing nor list export refits POD or classification. Compare
+several images with the conditional means before assigning physical names to
+the requested candidate groups.
+
+The optional validation-only study reuses saved modal coefficients and frozen
+candidate assignments, with no TIFF reads, POD refit, cluster rediscovery, or
+test evaluation. It compares training caps `[256, 512, 1024]` using the same
+examples for both models at each point and a fixed validation sample. C,
+quantum encoding factor, and repetition count are selected from validation;
+the factor does not change the RBF features or target labels. Outputs include
+learning-curve figures, search tables, sample/class counts, and selected
+parameters. Use a fresh study-output folder to preserve prior results.
+
+Increasing training count, C, circuit depth, or encoding complexity does not
+guarantee higher accuracy. Use validation balanced accuracy and macro-F1 to
+assess the learning curve and training-to-validation gaps. A previously viewed
+test matrix must not guide further selection; reserve a fresh chronological
+block or independent tunnel run for the final comparison. See the Anaconda
+guide for the notebook controls and rerun sequence.
 
 ## Timing and publication limits
 

@@ -4,7 +4,7 @@ Verified in the attached Linux environment using Python 3.12.14. No user
 experimental images were available. The Windows interactive crop window still
 requires a check on the user's computer.
 
-- **59 unittest cases: 58 passed, one optional Qiskit equivalence check skipped**
+- **85 unittest cases: 84 passed, one optional Qiskit equivalence check skipped**
   because Qiskit was unavailable. The mandatory NumPy quantum map was checked
   against independent explicit gate matrices and an analytic fidelity result.
 - A complete CLI run processed **200 native 768×512, 16-bit TIFF software-test
@@ -34,12 +34,14 @@ requires a check on the user's computer.
   obsolete classifier files are removed on explicit overwrite.
 - The project built offline as a Python wheel, installed into an isolated
   target folder, and its module CLI launched outside the source tree.
-- The Anaconda starter notebook was validated with nbformat and executed
-  top-to-bottom using nbclient and a real Python Jupyter kernel on the 200-frame
-  software fixture. All 10 code cells passed and produced 16 embedded image
-  outputs. The processing child generated 42 figure exports, preserved the
-  notebook's inline backend, and left the full-record run disabled. The source
-  starter notebook is saved clean, without software-fixture results.
+- The expanded Anaconda notebook was validated with nbformat and executed
+  top-to-bottom using nbclient and a real Python Jupyter kernel on a private
+  150-frame, 32×48, 16-bit synthetic TIFF fixture. All 14 source code cells
+  passed with pilot/full processing and the optional validation study enabled.
+  Checks covered both classifier parameter paths, grouped candidate images,
+  single-file inspection, CSV-list export, saved-mode recoloring, and frozen-label
+  learning curves. Source notebooks retain no fixture outputs; full processing
+  and the validation study remain disabled by default for normal Run All.
 - Notebook helper tests check kernel-interpreter reuse, partial results,
   output-folder protection, path resolution and interruption cleanup. The
   actual Anaconda Navigator / Windows notebook interface remains untested here.
@@ -53,6 +55,20 @@ requires a check on the user's computer.
   incomplete class coverage, explicit single-class warnings, and unchanged
   tuning and predictions when only reporting fields are added. Scores retain
   their original definitions; coverage warnings do not alter the experiment.
+- Quantum-scale regression checks confirm that changing the encoding factor
+  preserves candidate assignments and RBF inputs. The default factor of one
+  reproduces the previous kernels, predictions, and test metrics. Changing
+  held-out test values or labels cannot affect validation-selected settings.
+- Saved-run study checks cover fixed validation rows, matched model samples,
+  actual capped counts, poisoned-test invariance, the original scaler's
+  near-constant-feature behavior, and output/source collision protection. The
+  study exports training/validation results only and neither reads TIFFs nor
+  refits POD or discovers new labels.
+- Candidate-viewer checks cover native 16-bit values, shared grayscale limits,
+  saved crop/bin consistency, exact frame provenance, moved source folders,
+  prediction-only test rows, complete per-candidate file lists, and source alias
+  protection. Synthetic gallery, confusion, and learning-curve layouts were
+  visually inspected; actual experimental TIFFs must be inspected locally.
 
 Temporary software fixtures and their plots are excluded from the source ZIP.
 Full experimental validation still requires checking actual TIFF ordering,

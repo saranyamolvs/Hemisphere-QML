@@ -3,7 +3,8 @@
 You can use your existing Anaconda installation. Open the supplied
 `Schlieren_POD_QSVM.ipynb` notebook to enter your TIFF folder, select a fixed crop,
 run the 200-image pilot, and view figures and tables in notebook cells. A separate
-Python virtual environment is not required.
+Python virtual environment is not required. The same notebook can show original
+images grouped by candidate and compare classifier settings from saved results.
 
 ## Open the project
 
@@ -98,6 +99,37 @@ or a reliable performance comparison. The state labels are candidate clusters,
 not independently validated physical flow regimes. The quantum kernel uses an
 exact classical simulator.
 
+## Set classifier sample counts and quantum encoding scale
+
+The parameters cell exposes the settings used by both pilot and full runs:
+
+```python
+CLASSIFIER_MAX_TRAIN = 512
+CLASSIFIER_MAX_VALIDATION = 512
+CLASSIFIER_MAX_TEST = 256
+CLASSIFIER_C_VALUES = [0.01, 0.1, 1.0, 10.0, 100.0]
+QUANTUM_ANGLE_SCALES = [0.1, 0.25, 0.5, 1.0]
+QUANTUM_REPETITIONS = [1, 2]
+```
+
+These are caps on classifier examples, not the number of TIFFs processed.
+`PILOT_FRAMES` controls the pilot image count; the full configuration uses up to
+20,000. Both classifiers use the same capped examples. A 200-frame pilot can
+provide far fewer than 512 training or validation examples, and actual counts
+are reported in its metrics.
+
+`QUANTUM_ANGLE_SCALES` searches factors applied only when constructing quantum
+states from the shared angle features. It does not rescale the RBF features or
+change the K-means target assignments. Scale, C, and repetitions are chosen using
+validation scores. Larger C, deeper circuits, and more training examples do not
+guarantee a better held-out score. Inspect training and validation results before
+drawing a conclusion about overfitting or sample-size limits.
+
+Rerun the parameters cell after editing these controls. A new image-processing
+run needs a fresh output directory or the explicit overwrite setting. To study
+an existing run without repeating image processing, use the validation-only
+section below.
+
 ## Adjust an existing mode-shape colorbar
 
 Use the notebook's **Adjust the colorbar of already saved mode shapes** section.
@@ -151,6 +183,90 @@ pilot. Cropped width and height must divide exactly by the bin factor.
 For a large local run, keep the computer awake and allow the kernel to finish.
 Closing a browser tab does not necessarily stop the Jupyter kernel; check the
 running sessions before starting a second copy of the same analysis.
+
+## View images belonging to each candidate
+
+Set `REVIEW_RESULTS_DIRECTORY` in the parameters cell to the completed run, for
+example:
+
+```python
+REVIEW_RESULTS_DIRECTORY = PROJECT_DIR / "results" / "notebook_full"
+GALLERY_EXAMPLES_PER_CANDIDATE = 4
+GALLERY_SEED = 42
+GALLERY_LABEL_COLUMN = "state"
+GALLERY_PARTITION = "train"
+GALLERY_PROCESSED = True
+GALLERY_ONLY_CANDIDATE = None
+```
+
+Run setup/imports, parameters, and **Inspect images in each candidate group**.
+This does not run POD or classification again. Each image shows its original
+filename, time, partition, and candidate assignment. Change the seed to see
+other examples, or set `GALLERY_ONLY_CANDIDATE = "candidate_2"` to inspect only
+that group. All panels share grayscale limits. The default uses training frames
+for developing the physical interpretation before examining a fresh holdout.
+
+The viewer applies the crop and binning recorded with that saved run. Set
+`GALLERY_PROCESSED = False` to view the original TIFF pixels. Recorded source
+paths identify the images; if TIFFs moved, set `IMAGE_DIRECTORY_OVERRIDE` to
+their new folder. The TIFFs are never modified.
+
+`state_assignments.csv` is the complete image-to-candidate lookup. Open it in
+Excel and filter its `state` column to list every image in a group. The
+`rbf_test_prediction` and `qsvm_test_prediction` columns are populated only for
+the evaluated test examples; blank values elsewhere are expected. To inspect a
+prediction gallery, choose one of those columns and set
+`GALLERY_PARTITION = "test"` (or `None`). Titles retain both assignment and
+prediction so the two cannot be confused.
+
+Set `FILENAME_TO_VIEW` to an exact filename and run the single-image cell to
+inspect that particular TIFF. Set `EXPORT_CANDIDATE_LISTS = True` to write a CSV
+for each candidate to `CANDIDATE_LIST_OUTPUT_DIRECTORY`. Use a fresh export
+folder. This creates filename lists without copying thousands of TIFF files.
+
+Compare several frames per candidate with
+`figures/11_state_conditional_means.png` and the spatial POD modes. The requested
+three clusters are groups of similar snapshots; they are not automatically
+three independently established physical flow regimes.
+
+## Compare validation-only learning curves from saved results
+
+The **Validation-only classifier learning curves** section uses the saved
+`modal_coefficients.csv`, `state_assignments.csv`, `config_used.json`, and
+`classification_metrics.json`. It preserves the existing POD feature definition,
+training-fitted scaling, candidate assignments, and chronological partitions.
+It does not open TIFFs, refit POD, rediscover clusters, or evaluate the test
+block. Both models use identical training examples at each curve point, with a
+fixed validation sample across all training sizes.
+
+```python
+RUN_VALIDATION_STUDY = True
+LEARNING_CURVE_TRAIN_SIZES = [256, 512, 1024]
+VALIDATION_STUDY_OUTPUT_DIRECTORY = PROJECT_DIR / "results" / "validation_study"
+OVERWRITE_VALIDATION_STUDY = False
+```
+
+Run setup/imports, parameters, and the study cell. Choose a fresh study-output
+directory, separate from the saved run, to preserve previous studies. Replacing
+its generated outputs requires `OVERWRITE_VALIDATION_STUDY = True`. The study
+uses the shared validation cap, C grid, scale grid, and repetition settings from
+the parameters cell; actual available counts and class coverage are recorded.
+It saves editable PDF/SVG figures, PNG previews, and inspectable JSON/CSV
+results. Kernel storage and work grow approximately with the square of the
+classifier training count, so start with the provided sizes before enlarging
+them.
+
+Compare validation balanced accuracy and macro-F1 and inspect training-to-
+validation gaps. A learning curve may show that sample count is limiting, or
+that the current encoding remains less suitable for these targets. There is no
+guaranteed accuracy increase. The calculation remains an exact classical
+statevector simulation, with no hardware or speedup demonstrated.
+
+Do not choose settings from the previously viewed test matrix. Once choices are
+settled, reserve a fresh chronological block or independent tunnel run for final
+reporting, with uncertainty assessed by justified temporal blocks/runs. Changing
+the crop, number of clustering features, or cluster count can redefine the
+target task; keep existing labels fixed for controlled classifier comparisons.
 
 ## Optional dedicated Conda environment
 

@@ -5,7 +5,8 @@ import warnings
 
 import numpy as np
 
-from schlieren_qml.classify import ClassificationUnavailableError, make_splits, compare_classifiers
+from schlieren_qml.classify import (ClassificationUnavailableError, make_splits,
+                                     compare_classifiers, fit_validate_classifiers)
 
 
 class TemporalSplitTests(unittest.TestCase):
@@ -168,6 +169,89 @@ class ClassifierTests(unittest.TestCase):
         self.assertEqual(stats["fraction_rows_with_any_clipping"], 0.0)
         self.assertEqual(stats["fraction_rows_with_ignored_constant_feature_drift"], 1.0)
         self.assertEqual(stats["fraction_feature_values_outside_training_range"], 0.5)
+
+    def test_default_quantum_scale_matches_explicit_one(self):
+        first = self._compare()
+        self.config = dict(self.config, angle_scales=[1.0])
+        explicit = self._compare()
+        self.assertEqual(first["metrics"]["search"], explicit["metrics"]["search"])
+        self.assertEqual(first["metrics"]["test"], explicit["metrics"]["test"])
+        np.testing.assert_array_equal(first["kernels"]["train"], explicit["kernels"]["train"])
+        np.testing.assert_array_equal(first["kernels"]["test"], explicit["kernels"]["test"])
+        self.assertEqual(explicit["metrics"]["selected_hyperparameters"]["qsvm"]["angle_scale"], 1.0)
+
+    def test_quantum_scale_preserves_candidates_rbf_and_sample_rows(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            original = compare_classifiers(self.scores, None, self.splits, self.config)
+            scaled = compare_classifiers(self.scores, None, self.splits,
+                                         dict(self.config, angle_scales=[0.25]))
+        np.testing.assert_array_equal(original["labels"], scaled["labels"])
+        np.testing.assert_array_equal(original["angles"], scaled["angles"])
+        np.testing.assert_array_equal(original["state_centers"], scaled["state_centers"])
+        for partition in ("train_indices", "validation_indices", "test_indices"):
+            np.testing.assert_array_equal(original[partition], scaled[partition])
+        self.assertEqual(original["metrics"]["search"]["rbf_svm"], scaled["metrics"]["search"]["rbf_svm"])
+        np.testing.assert_array_equal(original["predictions"]["rbf_svm"], scaled["predictions"]["rbf_svm"])
+        self.assertGreater(np.max(np.abs(original["kernels"]["train"]-scaled["kernels"]["train"])), 0.1)
+        self.assertEqual(scaled["metrics"]["feature_map"]["angle_scale"], 0.25)
+        np.testing.assert_allclose(scaled["metrics"]["feature_map"]["encoded_input_range"], [0, np.pi/4])
+
+    def test_multiscale_tuning_is_unchanged_by_test_features_or_labels(self):
+        self.config = dict(self.config, angle_scales=[0.1, 0.5, 1.0], C_values=[0.1, 1.0])
+        first = self._compare()
+        changed_scores, changed_labels = self.scores.copy(), self.labels.copy()
+        changed_scores[self.splits["test"]] = 1e5
+        changed_labels[self.splits["test"]] = "never_in_training"
+        second = self._compare(scores=changed_scores, labels=changed_labels)
+        self.assertEqual(first["metrics"]["search"], second["metrics"]["search"])
+        self.assertEqual(first["metrics"]["selected_hyperparameters"], second["metrics"]["selected_hyperparameters"])
+        self.assertEqual(first["metrics"]["training"], second["metrics"]["training"])
+        self.assertEqual(first["metrics"]["validation"], second["metrics"]["validation"])
+
+    def test_validation_only_helper_reports_training_and_selects_from_grid(self):
+        # These rows already have training-fitted features; no held-out rows are supplied.
+        angles = (self.scores + 1.0) * np.pi/2
+        train, validation = self.splits["train"], self.splits["validation"]
+        result = fit_validate_classifiers(angles[train], self.labels[train],
+                                         angles[validation], self.labels[validation],
+                                         dict(self.config, angle_scales=[0.25, 1.0], reps=[1, 2]))
+        self.assertEqual(set(result["training"]), {"rbf_svm", "qsvm", "majority"})
+        self.assertEqual(set(result["validation"]), {"rbf_svm", "qsvm", "majority"})
+        self.assertEqual(result["kernel_train"].shape, (len(train), len(train)))
+        self.assertNotIn("test", result)
+        self.assertNotIn("test_indices", result)
+        rows = result["search"]["qsvm"]
+        best = max(rows, key=lambda row: (row["balanced_accuracy"], row["macro_f1"]))
+        selected = result["selected_hyperparameters"]["qsvm"]
+        self.assertEqual((selected["C"], selected["reps"], selected["angle_scale"]),
+                         (best["C"], best["reps"], best["angle_scale"]))
+        for metrics in result["validation"].values():
+            self.assertEqual(metrics["n"], len(validation))
+        for metrics in result["training"].values():
+            self.assertEqual(metrics["n"], len(train))
+
+    def test_invalid_quantum_scale_grid_is_rejected(self):
+        train, validation = self.splits["train"], self.splits["validation"]
+        for scales in ([], [0], [-0.1], [True], [np.nan], [np.inf], [1e308], "0.5", 1.0):
+            with self.subTest(scales=scales), self.assertRaisesRegex(ValueError, "angle_scales"):
+                fit_validate_classifiers(self.scores[train], self.labels[train],
+                                         self.scores[validation], self.labels[validation],
+                                         dict(self.config, angle_scales=scales))
+
+    def test_validation_only_helper_rejects_bad_features_and_labels(self):
+        train, validation = self.splits["train"], self.splits["validation"]
+        bad = self.scores[validation].copy()
+        bad[0, 0] = np.nan
+        with self.assertRaisesRegex(ValueError, "finite"):
+            fit_validate_classifiers(self.scores[train], self.labels[train], bad,
+                                     self.labels[validation], self.config)
+        with self.assertRaisesRegex(ValueError, "matching"):
+            fit_validate_classifiers(self.scores[train], self.labels[train],
+                                     self.scores[validation, :1], self.labels[validation], self.config)
+        with self.assertRaises(ClassificationUnavailableError):
+            fit_validate_classifiers(self.scores[train], np.full(len(train), "one_state"),
+                                     self.scores[validation], self.labels[validation], self.config)
 
     def test_data_limited_classification_has_a_distinct_exception(self):
         with self.assertRaises(ClassificationUnavailableError):

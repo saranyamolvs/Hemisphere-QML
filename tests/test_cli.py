@@ -118,6 +118,13 @@ class IntegrationContractTests(unittest.TestCase):
                 write_json(path, {"error": np.nan})
             self.assertFalse(path.exists())
 
+    def test_quantum_angle_scales_are_validated_before_processing(self):
+        basic = {"image_directory": "images", "output_directory": "results"}
+        _validate_config({**basic, "classifier": {"angle_scales": [0.1, 0.25, 0.5, 1.0]}})
+        for value in ([], 0.5, [True], [0.0], [-1.0], [float("nan")], [float("inf")]):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "angle_scales"):
+                _validate_config({**basic, "classifier": {"angle_scales": value}})
+
     def test_unavailable_classification_is_recorded_as_partial_not_success(self):
         import json
         with tempfile.TemporaryDirectory() as directory:

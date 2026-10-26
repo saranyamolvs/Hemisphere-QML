@@ -23,14 +23,33 @@
   "classifier": {
     "n_features": 4,
     "n_clusters": 3,
-    "max_train": 256,
-    "max_validation": 128,
+    "max_train": 512,
+    "max_validation": 512,
     "max_test": 256,
-    "C_values": [0.1, 1.0, 10.0],
-    "gamma_values": [0.1, 1.0, "scale"],
-    "reps": [1, 2],
+    "C_values": [
+      0.01,
+      0.1,
+      1.0,
+      10.0,
+      100.0
+    ],
+    "gamma_values": [
+      0.1,
+      1.0,
+      "scale"
+    ],
+    "reps": [
+      1,
+      2
+    ],
     "entanglement": "linear",
-    "seed": 42
+    "seed": 42,
+    "angle_scales": [
+      0.1,
+      0.25,
+      0.5,
+      1.0
+    ]
   },
   "figures": {
     "dpi": 600,

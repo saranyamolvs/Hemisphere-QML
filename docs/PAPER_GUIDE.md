@@ -163,14 +163,25 @@ training/validation/test frames, and train-fitted scaling. Keep an unmodified
 majority-class baseline and report balanced accuracy, macro F1, accuracy, class
 counts, and confusion counts. RBF-SVM is already a strong nonlinear baseline;
 adding a linear SVM can help interpret whether the quantum map provides anything
-beyond simple geometry. Compare across feature dimensions rather than choosing
-only the dimension that favors one model.
+beyond simple geometry. When comparing feature dimensions or encodings, freeze
+the target assignments first. Recomputing K-means labels after changing the
+feature dimension changes the classification task and prevents a direct
+accuracy comparison.
 
 If large records require capped kernel subsets, report exact selected indices
 and sample sizes. The image/POD record length and the number of SVM training
 samples are different quantities. Increasing the number of processed images
 does not automatically increase the quantum training set. Record validation
 search sizes and computational budgets for both methods.
+
+The saved-run validation study compares capped training sizes while preserving
+the existing POD coordinates, training-fitted angle scaler, and saved candidate
+assignments. Both models receive the same rows at each training size, and the
+validation examples remain fixed across the curve. It reads no TIFF images and
+reports no test metrics. Choose settings from validation evidence, then use a
+fresh chronological block or independent run for the final evaluation if the
+original test results have already been inspected. A larger training sample or
+search grid does not guarantee higher held-out accuracy.
 
 The fitted angle mapping can place validation/test features outside the
 training range. Clipping to [0,pi] is an explicit modeling choice, not a neutral
@@ -191,6 +202,15 @@ then RZZ(2*(pi-x_j)*(pi-x_k)) to each declared entangled pair. The default pairs
 are nearest neighbors in a linear chain. Features are train-scaled angles.
 Report this explicit gate convention, order, repetition count, and connectivity;
 the phrase “ZZ feature map” alone does not specify a reproducible circuit.
+
+The configurable positive input factor alpha replaces x by alpha*x only inside
+the quantum encoding. Thus the rotations become RZ(2*alpha*x_j) and
+RZZ(2*(pi-alpha*x_j)*(pi-alpha*x_k)); this is not merely a change of plot scale.
+Candidate definitions and the RBF inputs retain the same base features. Alpha,
+repetition count, and SVM C are selected using validation metrics, with alpha=1
+recovering the original encoding. Record the selected alpha and all searched
+values alongside the other circuit settings. Increasing circuit depth or qubit
+count does not by itself establish better accuracy or generalization.
 
     |psi(x)> = U_phi(x)|0>^d,
     K_Q(x,z) = |<psi(x)|psi(z)>|^2,
