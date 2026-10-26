@@ -122,6 +122,34 @@ def _label_counts(values: np.ndarray) -> dict[str, int]:
     return dict(sorted((str(k), int(v)) for k, v in Counter(values.tolist()).items()))
 
 
+def _evaluation_coverage(y, classes, partitions, sampled):
+    """Report class support without changing evaluation or model selection."""
+    def population(indices):
+        counts = {str(label): int(np.sum(y[indices] == label)) for label in classes}
+        observed = [label for label, count in counts.items() if count > 0]
+        missing = [label for label, count in counts.items() if count == 0]
+        return {
+            "n_frames": int(len(indices)),
+            "class_counts": counts,
+            "observed_classes": observed,
+            "missing_classes": missing,
+            "n_observed_classes": len(observed),
+            "full_class_coverage": not missing,
+        }
+
+    coverage = {
+        name: {"retained": population(indices), "evaluated": population(sampled[name])}
+        for name, indices in partitions.items()
+    }
+    return {
+        "intended_classes": classes.tolist(),
+        "class_definition": "Union of labels in the retained train, validation and test partitions; this reporting taxonomy is not used to select hyperparameters.",
+        "partitions": coverage,
+        "full_class_coverage": all(partition["evaluated"]["full_class_coverage"] for partition in coverage.values()),
+        "interpretation": "A single-class validation or test block evaluates that reference state only and cannot assess all intended states. Full class coverage alone does not establish temporal independence, sufficient sample size or physical ground truth.",
+    }
+
+
 def _as_labels(labels: Any, n: int) -> np.ndarray:
     labels = np.asarray(labels)
     if labels.ndim != 1 or len(labels) != n:
@@ -243,10 +271,14 @@ def compare_classifiers(
     classes = np.unique(y[np.concatenate(list(partitions.values()))])
     # Test labels do not define even the class denominator used in tuning.
     selection_classes = np.unique(y[np.concatenate([train, validation])])
+    evaluation_coverage = _evaluation_coverage(y, classes, partitions, sampled)
     for name, indices in sampled.items():
         missing = sorted(set(classes) - set(y[indices]))
         if missing:
             messages.append(f"Classes absent from sampled {name}: {', '.join(missing)}. Interpret aggregate metrics with class support.")
+        observed = evaluation_coverage["partitions"][name]["evaluated"]["observed_classes"]
+        if name in {"validation", "test"} and len(observed) == 1:
+            messages.append(f"The sampled {name} partition contains only one reference state ({observed[0]}). It cannot assess classification across all {len(classes)} intended states; accuracy and balanced accuracy describe that state alone.")
     unseen = sorted(set(y[np.concatenate([validation, test])]) - set(train_classes))
     if unseen:
         messages.append(f"Held-out classes absent from training cannot be learned: {', '.join(unseen)}.")
@@ -331,6 +363,7 @@ def compare_classifiers(
         "n_features": int(d),
         "n_qubits": int(d),
         "classes": classes.tolist(),
+        "evaluation_coverage": evaluation_coverage,
         "state_discovery": state_discovery,
         "test": test_metrics,
         "selected_hyperparameters": {"rbf_svm": best_rbf_parameters, "qsvm": best_q_parameters},

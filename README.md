@@ -103,6 +103,13 @@ Load saved arrays without pickle: `np.load(path, allow_pickle=False)`. Reconstru
 
 If the requested classification cannot be supported by the data, POD outputs are still saved, but `run_manifest.json` reports `status: partial` and `classification_status: unavailable`; the command exits with code 1. Invalid configuration raises an error rather than silently skipping classification. A deliberately POD-only run (`classify: false`) can finish with `status: complete` and `classification_status: disabled`. Undefined numeric quantities use JSON null; unsupported state-mean images use NaN in NPZ rather than fabricated zero-valued images.
 
+Completed processing does not establish a valid multiclass benchmark. Check
+`classification_metrics.json` → `evaluation_coverage`: every partition reports
+observed/missing states and full class coverage for both retained and evaluated
+frames. The notebook shows these counts before the accuracy table. A one-state
+test block cannot assess performance across all intended states, even if its
+accuracy is 100%; existing metric definitions and model settings are preserved.
+
 ## Scale to 20,000 images
 
 First inspect the pilot outputs and filename ordering. A folder with missing frame numbers is not automatically repaired: `time_s = sorted_sequence_index / fps` assumes no dropped images. If the camera dropped frames or filename counters encode gaps, obtain acquisition timestamps and extend the timing input before interpreting spectra. Keep `stride: 1` for temporal analyses. Temporal striding can alias high-frequency dynamics; this program does not apply an antialias filter.
