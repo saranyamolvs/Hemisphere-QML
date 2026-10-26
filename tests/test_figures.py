@@ -105,6 +105,56 @@ class FigureSourceTests(unittest.TestCase):
             self.assertEqual([(r["partition"],r["kernel_example_index"],r["filename"]) for r in rows],
                              [("train","0","f0.tif"),("train","1","f2.tif"),("train","2","f4.tif"),("test","0","f7.tif")])
 
+    def test_confusion_figure_reports_counts_label_source_and_computed_balanced_accuracy(self):
+        counts = np.array([[7,1,0],[0,3,1],[0,0,2]])
+        other = np.array([[6,2,0],[1,2,1],[0,1,1]])
+        classes = ["candidate_1", "candidate_2", "candidate_3"]
+        result = {"labels":np.array(classes), "label_mode":"cluster-surrogate",
+                  "metrics":{"classes":classes, "test":{"rbf_svm":{"balanced_accuracy":0.0}}},
+                  "confusion":{"rbf_svm":counts, "qsvm":other}}
+        captured = []
+        def inspect_and_close(fig, directory, name, dpi):
+            self.assertEqual(name, "09_confusion_matrices")
+            image_axes = [ax for ax in fig.axes if ax.images]
+            self.assertEqual(len(image_axes), 2)
+            self.assertIn("N = 14 held-out test examples", fig._suptitle.get_text())
+            self.assertIn("training-defined K-means assignments", fig._suptitle.get_text())
+            self.assertIn("Balanced accuracy: 87.5%", image_axes[0].get_title())
+            self.assertIn("Balanced accuracy: 58.3%", image_axes[1].get_title())
+            for ax in image_axes:
+                self.assertEqual([t.get_text() for t in ax.get_xticklabels()], ["Candidate 1", "Candidate 2", "Candidate 3"])
+                self.assertEqual([t.get_text() for t in ax.get_yticklabels()], ["Candidate 1", "Candidate 2", "Candidate 3"])
+                self.assertEqual(ax.images[0].get_clim(), (0,1))
+            self.assertEqual(image_axes[0].texts[0].get_text(), "87.5%\n(n=7)")
+            np.testing.assert_allclose(image_axes[0].images[0].get_array(), counts/counts.sum(axis=1,keepdims=True))
+            captured.append(True)
+            figures.plt.close(fig)
+            return []
+        with tempfile.TemporaryDirectory() as tmp, patch.object(figures,"_save",side_effect=inspect_and_close):
+            notes = []
+            figures._classification_figures(result,Path(tmp),40,notes)
+            with (Path(tmp)/"09_confusion_matrices.csv").open(newline="") as stream:
+                rows = list(csv.DictReader(stream))
+            self.assertEqual(sum(int(row["count"]) for row in rows if row["model"]=="rbf_svm"),14)
+            self.assertEqual(rows[0]["reference_state"], "candidate_1")
+            self.assertEqual(rows[0]["fraction_within_reference"], "0.875")
+            self.assertIn("training-defined K-means assignments", notes[0])
+        self.assertEqual(captured, [True])
+
+    def test_confusion_figure_does_not_invent_label_source_or_absent_state_recall(self):
+        result = {"labels":np.array(["one","two"]),
+                  "confusion":{"rbf_svm":np.array([[1,1],[0,0]])}}
+        def inspect_and_close(fig, directory, name, dpi):
+            ax = next(ax for ax in fig.axes if ax.images)
+            self.assertIn("Balanced accuracy: 50.0%", ax.get_title())
+            self.assertIn("source not specified", fig._suptitle.get_text())
+            self.assertIn("N = 2", fig._suptitle.get_text())
+            self.assertEqual(ax.texts[2].get_text(), "No test\nsamples")
+            figures.plt.close(fig)
+            return []
+        with tempfile.TemporaryDirectory() as tmp, patch.object(figures,"_save",side_effect=inspect_and_close):
+            figures._classification_figures(result,Path(tmp),40,[])
+
     def test_manual_mode_scale_is_shared_symmetric_and_does_not_modify_modes(self):
         modes = np.array([[1.,-1.,0.,0.],[0.,0.,1.,-1.]])/np.sqrt(2)
         original = modes.copy()

@@ -9,6 +9,7 @@ and candidate-state centers use the training partition only.
 from __future__ import annotations
 
 from collections import Counter
+from numbers import Real
 from time import perf_counter
 from typing import Any
 import warnings
@@ -159,6 +160,147 @@ def _as_labels(labels: Any, n: int) -> np.ndarray:
     return labels.astype(str)
 
 
+def _positive_grid(config, key, default):
+    values = config.get(key, default)
+    if not isinstance(values, (list, tuple, np.ndarray)) or np.ndim(values) != 1 or not len(values):
+        raise ValueError(f"{key} must be a nonempty list of positive finite numbers.")
+    if any(isinstance(value, (bool, np.bool_)) or not isinstance(value, Real)
+           or not np.isfinite(value) or value <= 0 for value in values):
+        raise ValueError(f"{key} must be a nonempty list of positive finite numbers.")
+    return [float(value) for value in values]
+
+
+def _quantum_angles(angles, scale):
+    """Scale only quantum inputs, preserving shared features and candidate labels."""
+    try:
+        with np.errstate(over="raise", invalid="raise"):
+            return np.asarray(angles, dtype=float) * scale
+    except FloatingPointError as exc:
+        raise ValueError("angle_scale generates non-finite quantum inputs; use a smaller positive scale.") from exc
+
+
+def fit_validate_classifiers(
+    train_angles: np.ndarray,
+    train_labels: np.ndarray,
+    validation_angles: np.ndarray,
+    validation_labels: np.ndarray,
+    config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Fit and select models using supplied training and validation data only.
+
+    Inputs are the same training-fitted base angle features for both models.
+    This helper neither discovers states nor fits a scaler, and accepts no test
+    data. Callers must preserve their upstream training-fitted transforms and
+    fixed target definition. ``angle_scales`` defaults to ``[1.0]``; each scale
+    multiplies inputs only when preparing quantum states. Candidate labels and
+    RBF inputs are unchanged. C, quantum scale, and repetition count are chosen
+    by validation balanced accuracy, then macro-F1; remaining ties retain the
+    first grid entry. Validation rows are never added to fitted training rows.
+
+    The returned models and selected quantum training states support a separate
+    held-out evaluation. Reportable training/validation metrics and search rows
+    contain no test-derived class taxonomy or performance values.
+    """
+    from .quantum import feature_states, fidelity_kernel
+
+    config = dict(config or {})
+    train_X = np.asarray(train_angles, dtype=float)
+    validation_X = np.asarray(validation_angles, dtype=float)
+    if (train_X.ndim != 2 or validation_X.ndim != 2 or len(train_X) < 2
+            or not len(validation_X) or not 1 <= train_X.shape[1] <= 12
+            or train_X.shape[1] != validation_X.shape[1]
+            or not np.all(np.isfinite(train_X)) or not np.all(np.isfinite(validation_X))):
+        raise ValueError("Training and validation angles must be finite nonempty 2D arrays with matching 1–12 features.")
+    train_y = _as_labels(train_labels, len(train_X))
+    validation_y = _as_labels(validation_labels, len(validation_X))
+    if len(np.unique(train_y)) < 2:
+        raise ClassificationUnavailableError("The training examples contain fewer than two states.")
+    selection_classes = np.unique(np.concatenate([train_y, validation_y]))
+    C_values = _positive_grid(config, "C_values", [0.1, 1.0, 10.0])
+    angle_scales = _positive_grid(config, "angle_scales", [1.0])
+    if any(scale > np.finfo(float).max / np.pi for scale in angle_scales):
+        raise ValueError("angle_scales must keep the encoded [0, pi] input range finite.")
+    gamma_values = config.get("gamma_values", [0.1, 1.0, "scale"])
+    if (not isinstance(gamma_values, (list, tuple, np.ndarray)) or np.ndim(gamma_values) != 1
+            or not len(gamma_values)
+            or any((value not in {"scale", "auto"}) if isinstance(value, str)
+                   else (isinstance(value, (bool, np.bool_)) or not isinstance(value, Real)
+                         or not np.isfinite(value) or value <= 0) for value in gamma_values)):
+        raise ValueError("gamma_values must be positive finite numbers, 'scale', or 'auto'.")
+    repetitions = config.get("reps", 2)
+    repetitions = [repetitions] if isinstance(repetitions, (int, np.integer)) else repetitions
+    if (not isinstance(repetitions, (list, tuple, np.ndarray)) or np.ndim(repetitions) != 1
+            or not len(repetitions)
+            or any(isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer))
+                   or value < 1 for value in repetitions)):
+        raise ValueError("reps must be a positive integer or a nonempty list of positive integers.")
+    entanglement = config.get("entanglement", "linear")
+    if not isinstance(entanglement, str) or entanglement not in {"linear", "full"}:
+        raise ValueError("entanglement must be 'linear' or 'full'.")
+    class_weight = config.get("class_weight", "balanced")
+
+    started = perf_counter()
+    best_rbf_key = (-np.inf, -np.inf)
+    rbf_search = []
+    for C in C_values:
+        for gamma in gamma_values:
+            model = SVC(C=C, gamma=gamma, kernel="rbf", class_weight=class_weight)
+            model.fit(train_X, train_y)
+            performance = _metrics(validation_y, model.predict(validation_X), selection_classes)
+            rbf_search.append({"C": C, "gamma": gamma, **performance})
+            key = (performance["balanced_accuracy"], performance["macro_f1"])
+            if key > best_rbf_key:
+                best_rbf_key, best_rbf = key, model
+                best_rbf_parameters = {"C": C, "gamma": gamma}
+    rbf_fit_seconds = perf_counter() - started
+
+    quantum_started = perf_counter()
+    best_q_key = (-np.inf, -np.inf)
+    quantum_search = []
+    for scale in angle_scales:
+        quantum_train_X = _quantum_angles(train_X, scale)
+        quantum_validation_X = _quantum_angles(validation_X, scale)
+        for reps in repetitions:
+            train_states = feature_states(quantum_train_X, reps=int(reps), entanglement=entanglement)
+            validation_states = feature_states(quantum_validation_X, reps=int(reps), entanglement=entanglement)
+            K_train = fidelity_kernel(train_states)
+            K_validation = fidelity_kernel(validation_states, train_states)
+            for C in C_values:
+                model = SVC(C=C, kernel="precomputed", class_weight=class_weight)
+                model.fit(K_train, train_y)
+                performance = _metrics(validation_y, model.predict(K_validation), selection_classes)
+                quantum_search.append({"C": C, "reps": int(reps), "angle_scale": scale, **performance})
+                key = (performance["balanced_accuracy"], performance["macro_f1"])
+                if key > best_q_key:
+                    best_q_key, best_q = key, model
+                    best_q_parameters = {"C": C, "reps": int(reps), "entanglement": entanglement,
+                                         "angle_scale": scale}
+                    best_train_states, best_kernel = train_states, K_train
+                    best_validation_kernel = K_validation
+    quantum_fit_seconds = perf_counter() - quantum_started
+    majority = Counter(train_y.tolist()).most_common(1)[0][0]
+    training_predictions = {"rbf_svm": best_rbf.predict(train_X),
+                            "qsvm": best_q.predict(best_kernel),
+                            "majority": np.full(len(train_y), majority)}
+    validation_predictions = {"rbf_svm": best_rbf.predict(validation_X),
+                              "qsvm": best_q.predict(best_validation_kernel),
+                              "majority": np.full(len(validation_y), majority)}
+    return {
+        "models": {"rbf_svm": best_rbf, "qsvm": best_q},
+        "train_states": best_train_states,
+        "kernel_train": best_kernel,
+        "selected_hyperparameters": {"rbf_svm": best_rbf_parameters, "qsvm": best_q_parameters},
+        "search": {"rbf_svm": rbf_search, "qsvm": quantum_search},
+        "training": {name: _metrics(train_y, predicted, selection_classes)
+                     for name, predicted in training_predictions.items()},
+        "validation": {name: _metrics(validation_y, predicted, selection_classes)
+                       for name, predicted in validation_predictions.items()},
+        "timing_seconds": {"rbf_validation_search": rbf_fit_seconds,
+                           "quantum_states_kernels_validation_search": quantum_fit_seconds},
+        "selection_classes": selection_classes,
+    }
+
+
 def compare_classifiers(
     scores: np.ndarray,
     labels: np.ndarray | None,
@@ -170,14 +312,15 @@ def compare_classifiers(
     ``scores`` must come from a POD model fitted on ``splits['train']`` only;
     this function cannot verify how upstream scores were obtained. The scaler
     and optional K-means state discovery use the entire training partition.
-    Both SVMs use identical capped training/validation/test rows and identical
-    angle features. They remain fitted on training only after tuning; validation
+    Both SVMs use identical capped training/validation/test rows and shared base
+    angle features. Only quantum state preparation applies a selected input
+    scale. They remain fitted on training only after tuning; validation
     is deliberately not merged back before the final held-out comparison.
 
     Configuration: n_features=4, n_clusters=2, max_train=256,
     max_validation=128, max_test=256, C_values=[.1,1,10],
     gamma_values=[.1,1,'scale'], reps=2 (or a validation-selected list),
-    entanglement='linear', seed=42, class_weight='balanced'.
+    entanglement='linear', angle_scales=[1.0], seed=42, class_weight='balanced'.
     """
     from .quantum import feature_states, fidelity_kernel, kernel_diagnostics, feature_map_metadata
 
@@ -285,56 +428,15 @@ def compare_classifiers(
     if len(validation) < 20 or len(test) < 20:
         messages.append("Fewer than 20 evaluated validation or test frames: results are a pipeline pilot, not a publication-grade performance estimate.")
 
-    C_values = config.get("C_values", [0.1, 1.0, 10.0])
-    if not C_values or any(not np.isfinite(c) or float(c) <= 0 for c in C_values):
-        raise ValueError("C_values must be a nonempty list of positive finite numbers.")
-    gamma_values = config.get("gamma_values", [0.1, 1.0, "scale"])
-    if not gamma_values or any((g not in {"scale", "auto"} if isinstance(g, str) else not np.isfinite(g) or float(g) <= 0) for g in gamma_values):
-        raise ValueError("gamma_values must be positive finite numbers, 'scale', or 'auto'.")
-    class_weight = config.get("class_weight", "balanced")
-    started = perf_counter()
-    best_rbf = None
-    best_key = (-np.inf, -np.inf)
-    rbf_search = []
-    for C in C_values:
-        for gamma in gamma_values:
-            model = SVC(C=float(C), gamma=gamma, kernel="rbf", class_weight=class_weight)
-            model.fit(angles[train], y[train])
-            performance = _metrics(y[validation], model.predict(angles[validation]), selection_classes)
-            rbf_search.append({"C": float(C), "gamma": gamma, **performance})
-            key = (performance["balanced_accuracy"], performance["macro_f1"])
-            if key > best_key:
-                best_key, best_rbf = key, model
-                best_rbf_parameters = {"C": float(C), "gamma": gamma}
-    rbf_fit_seconds = perf_counter() - started
-
-    repetitions = config.get("reps", 2)
-    repetitions = [repetitions] if isinstance(repetitions, (int, np.integer)) else list(repetitions)
-    if not repetitions or any(not isinstance(r, (int, np.integer)) or r < 1 for r in repetitions):
-        raise ValueError("reps must be a positive integer or a nonempty list of positive integers.")
-    entanglement = config.get("entanglement", "linear")
-    quantum_search = []
-    best_q_key = (-np.inf, -np.inf)
-    best_q = None
-    quantum_started = perf_counter()
-    for reps in repetitions:
-        train_states = feature_states(angles[train], reps=int(reps), entanglement=entanglement)
-        validation_states = feature_states(angles[validation], reps=int(reps), entanglement=entanglement)
-        K_train = fidelity_kernel(train_states)
-        K_validation = fidelity_kernel(validation_states, train_states)
-        for C in C_values:
-            model = SVC(C=float(C), kernel="precomputed", class_weight=class_weight)
-            model.fit(K_train, y[train])
-            performance = _metrics(y[validation], model.predict(K_validation), selection_classes)
-            quantum_search.append({"C": float(C), "reps": int(reps), **performance})
-            key = (performance["balanced_accuracy"], performance["macro_f1"])
-            if key > best_q_key:
-                best_q_key, best_q = key, model
-                best_q_parameters = {"C": float(C), "reps": int(reps), "entanglement": entanglement}
-                best_train_states = train_states
-                best_kernel = K_train
-    quantum_fit_seconds = perf_counter() - quantum_started
-    test_states = feature_states(angles[test], reps=best_q_parameters["reps"], entanglement=entanglement)
+    fitted = fit_validate_classifiers(angles[train], y[train], angles[validation], y[validation], config)
+    best_rbf, best_q = fitted["models"]["rbf_svm"], fitted["models"]["qsvm"]
+    best_rbf_parameters = fitted["selected_hyperparameters"]["rbf_svm"]
+    best_q_parameters = fitted["selected_hyperparameters"]["qsvm"]
+    best_train_states, best_kernel = fitted["train_states"], fitted["kernel_train"]
+    rbf_search, quantum_search = fitted["search"]["rbf_svm"], fitted["search"]["qsvm"]
+    entanglement = best_q_parameters["entanglement"]
+    test_states = feature_states(_quantum_angles(angles[test], best_q_parameters["angle_scale"]),
+                                 reps=best_q_parameters["reps"], entanglement=entanglement)
     K_test = fidelity_kernel(test_states, best_train_states)
     predictions = {
         "rbf_svm": best_rbf.predict(angles[test]),
@@ -365,6 +467,8 @@ def compare_classifiers(
         "classes": classes.tolist(),
         "evaluation_coverage": evaluation_coverage,
         "state_discovery": state_discovery,
+        "training": fitted["training"],
+        "validation": fitted["validation"],
         "test": test_metrics,
         "selected_hyperparameters": {"rbf_svm": best_rbf_parameters, "qsvm": best_q_parameters},
         "selection": "Highest validation balanced accuracy; macro-F1 breaks ties; first grid entry resolves remaining ties. No refit on validation.",
@@ -378,8 +482,12 @@ def compare_classifiers(
                          "constant_feature_policy": "Frozen at angle zero, including held-out rows; drift reported separately."},
         "clipping": clip_stats,
         "kernel_diagnostics": kernel_diagnostics(best_kernel),
-        "feature_map": feature_map_metadata(d, reps=best_q_parameters["reps"], entanglement=entanglement),
-        "timing_seconds": {"rbf_validation_search": rbf_fit_seconds, "quantum_states_kernels_validation_search": quantum_fit_seconds},
+        "feature_map": {**feature_map_metadata(d, reps=best_q_parameters["reps"], entanglement=entanglement),
+                        "angle_scale": best_q_parameters["angle_scale"],
+                        "base_input_range": [0.0, float(np.pi)],
+                        "encoded_input_range": [0.0, float(np.pi * best_q_parameters["angle_scale"])],
+                        "input_scale_definition": "Quantum states receive angle_scale times the shared base angle features; RBF inputs and candidate labels are unchanged."},
+        "timing_seconds": fitted["timing_seconds"],
         "kernel_work": {"train_matrix_entries": int(len(train) ** 2), "validation_matrix_entries": int(len(validation) * len(train)), "test_matrix_entries": int(len(test) * len(train)), "statevector_dimension": int(2**d)},
         "warnings": messages,
     }

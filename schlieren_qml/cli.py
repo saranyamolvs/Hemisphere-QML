@@ -115,7 +115,7 @@ def _validate_config(cfg):
     classifier = cfg.get("classifier", {})
     if not isinstance(classifier, dict):
         raise ValueError("classifier must be a JSON object.")
-    classifier_keys = {"n_features", "n_clusters", "max_train", "max_validation", "max_test", "C_values", "gamma_values", "reps", "entanglement", "seed", "class_weight"}
+    classifier_keys = {"n_features", "n_clusters", "max_train", "max_validation", "max_test", "C_values", "gamma_values", "reps", "entanglement", "seed", "class_weight", "angle_scales"}
     if set(classifier)-classifier_keys:
         raise ValueError(f"Unknown classifier keys: {', '.join(sorted(set(classifier)-classifier_keys))}")
     for key, default, minimum in (("n_features", 4, 1), ("n_clusters", 2, 2), ("seed", 42, 0)):
@@ -130,6 +130,11 @@ def _validate_config(cfg):
             raise ValueError("classifier.C_values must be a nonempty list.")
         for value in classifier["C_values"]:
             positive(value, "classifier.C_values")
+    if "angle_scales" in classifier:
+        if not isinstance(classifier["angle_scales"], list) or not classifier["angle_scales"]:
+            raise ValueError("classifier.angle_scales must be a nonempty list.")
+        for value in classifier["angle_scales"]:
+            positive(value, "classifier.angle_scales")
     if "gamma_values" in classifier:
         if not isinstance(classifier["gamma_values"], list) or not classifier["gamma_values"]:
             raise ValueError("classifier.gamma_values must be a nonempty list.")
