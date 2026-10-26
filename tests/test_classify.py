@@ -100,6 +100,59 @@ class ClassifierTests(unittest.TestCase):
         second = self._compare(labels=labels)
         self.assertEqual(first["metrics"]["selected_hyperparameters"], second["metrics"]["selected_hyperparameters"])
         self.assertEqual(first["metrics"]["search"], second["metrics"]["search"])
+        for model in first["predictions"]:
+            np.testing.assert_array_equal(first["predictions"][model], second["predictions"][model])
+
+    def test_single_class_test_is_flagged_without_redefining_metrics(self):
+        labels = self.labels.copy()
+        labels[self.splits["test"]] = "upper"
+        result = self._compare(labels=labels)
+        coverage = result["metrics"]["evaluation_coverage"]
+        test = coverage["partitions"]["test"]
+        self.assertFalse(coverage["full_class_coverage"])
+        self.assertFalse(test["retained"]["full_class_coverage"])
+        self.assertFalse(test["evaluated"]["full_class_coverage"])
+        self.assertEqual(test["evaluated"]["observed_classes"], ["upper"])
+        self.assertEqual(test["evaluated"]["missing_classes"], ["lower"])
+        self.assertEqual(test["evaluated"]["n_frames"], len(result["test_indices"]))
+        self.assertTrue(any("only one reference state" in message and "test" in message for message in result["metrics"]["warnings"]))
+        for model, predictions in result["predictions"].items():
+            reported = result["metrics"]["test"][model]
+            expected_accuracy = float(np.mean(predictions == "upper"))
+            self.assertEqual(reported["accuracy"], expected_accuracy)
+            self.assertEqual(reported["balanced_accuracy"], expected_accuracy)
+            # With only one true class, the other declared class has zero F1.
+            present_f1 = 2*expected_accuracy/(1+expected_accuracy)
+            self.assertAlmostEqual(reported["macro_f1"], present_f1/2)
+        json.dumps(coverage, allow_nan=False)
+
+    def test_complete_class_coverage_is_reported_for_each_population(self):
+        result = self._compare()
+        coverage = result["metrics"]["evaluation_coverage"]
+        self.assertTrue(coverage["full_class_coverage"])
+        self.assertEqual(coverage["intended_classes"], ["lower", "upper"])
+        for name in ("train", "validation", "test"):
+            report = coverage["partitions"][name]
+            self.assertEqual(report["retained"]["n_frames"], len(self.splits[name]))
+            self.assertEqual(report["evaluated"]["n_frames"], len(result[f"{name}_indices"]))
+            for population in report.values():
+                self.assertTrue(population["full_class_coverage"])
+                self.assertEqual(population["missing_classes"], [])
+                self.assertEqual(population["n_observed_classes"], 2)
+                self.assertEqual(sum(population["class_counts"].values()), population["n_frames"])
+
+    def test_sampling_loss_of_coverage_is_distinguished_from_retained_support(self):
+        config = dict(self.config, max_validation=1, max_test=1)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            result = compare_classifiers(self.scores, self.labels, self.splits, config)
+        for name in ("validation", "test"):
+            report = result["metrics"]["evaluation_coverage"]["partitions"][name]
+            self.assertTrue(report["retained"]["full_class_coverage"])
+            self.assertFalse(report["evaluated"]["full_class_coverage"])
+            self.assertEqual(report["evaluated"]["n_frames"], 1)
+            self.assertTrue(any("only one reference state" in message and name in message
+                                for message in result["metrics"]["warnings"]))
 
     def test_constant_training_feature_does_not_encode_heldout_drift(self):
         scores = self.scores.copy()

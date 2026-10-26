@@ -4,7 +4,7 @@ Verified in the attached Linux environment using Python 3.12.14. No user
 experimental images were available. The Windows interactive crop window still
 requires a check on the user's computer.
 
-- **56 unittest cases: 55 passed, one optional Qiskit equivalence check skipped**
+- **59 unittest cases: 58 passed, one optional Qiskit equivalence check skipped**
   because Qiskit was unavailable. The mandatory NumPy quantum map was checked
   against independent explicit gate matrices and an analytic fidelity result.
 - A complete CLI run processed **200 native 768×512, 16-bit TIFF software-test
@@ -48,6 +48,11 @@ requires a check on the user's computer.
   the raw images or image cache. The saved POD file hash was unchanged. Tests
   check shared symmetric limits, pooled-percentile selection, reported clipping
   fractions, invalid options, and preservation of original result files.
+- Class-coverage reporting distinguishes retained frames from the capped
+  classifier examples in each partition. Regression tests cover complete and
+  incomplete class coverage, explicit single-class warnings, and unchanged
+  tuning and predictions when only reporting fields are added. Scores retain
+  their original definitions; coverage warnings do not alter the experiment.
 
 Temporary software fixtures and their plots are excluded from the source ZIP.
 Full experimental validation still requires checking actual TIFF ordering,
