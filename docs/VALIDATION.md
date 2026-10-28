@@ -4,9 +4,27 @@ Verified in the attached Linux environment using Python 3.12.14. No user
 experimental images were available. The Windows interactive crop window still
 requires a check on the user's computer.
 
-- **93 unittest cases: 92 passed, one optional Qiskit equivalence check skipped**
+- **112 unittest cases: 111 passed, one optional Qiskit equivalence check skipped**
   because Qiskit was unavailable. The mandatory NumPy quantum map was checked
   against independent explicit gate matrices and an analytic fidelity result.
+- The rebuilt TP notebook was executed top-to-bottom in a real Jupyter kernel
+  using 150 private synthetic TIFFs. The check included one human-confirmed
+  false alarm and one saved coordinate correction, immediate review application,
+  all three training-defined TP categories, ten 16-frame reference sheets,
+  external-label POD/SVM/QSVM processing, and reconciled per-test-image
+  predictions. It also refreshed the same original mode figure from ±0.009 to
+  ±0.007 and back without refitting POD, and rejected mismatched model settings.
+  These are software fixtures, not experimental results. Source notebooks
+  remain clean of fixture outputs.
+- New tests cover review accept/correct/defer behavior, coordinate-specific
+  approval on retracking, retained automatic flags, keyboard shortcut conflicts,
+  correction of already accepted points, and category review provenance.
+  Streaming reference-export checks cover partial pages, coordinate mapping,
+  original-file preservation, atomic overwrite, and output protections.
+  Test-prediction exports are reconciled with saved metrics and reject
+  mismatched labels, unpaired samples, and source aliases. GUI callbacks are
+  checked headlessly; the actual Windows GUI and experimental TP tracking
+  accuracy require local verification.
 - A complete CLI run processed **200 native 768×512, 16-bit TIFF software-test
   frames** with a fixed 640×448 crop, without spatial binning. It fitted
   training-only POD, defined candidate states, tuned both classifiers on the
