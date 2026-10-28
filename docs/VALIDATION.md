@@ -4,7 +4,7 @@ Verified in the attached Linux environment using Python 3.12.14. No user
 experimental images were available. The Windows interactive crop window still
 requires a check on the user's computer.
 
-- **85 unittest cases: 84 passed, one optional Qiskit equivalence check skipped**
+- **93 unittest cases: 92 passed, one optional Qiskit equivalence check skipped**
   because Qiskit was unavailable. The mandatory NumPy quantum map was checked
   against independent explicit gate matrices and an analytic fidelity result.
 - A complete CLI run processed **200 native 768×512, 16-bit TIFF software-test
@@ -81,3 +81,13 @@ through the normal notebook figure-display cell. Existing-result checks used
 the selected full-run directory, preserved fitted model bytes, and created no
 separate adjusted-image folder. The combined figure notes and scale metadata
 are refreshed with the applied display limits.
+
+The TP workflow notebook was executed top-to-bottom on 150 synthetic TIFFs,
+including initial coordinate CSVs, tracking, position overlays, three-category
+inspection, training-only mean/SD thresholds, and external-label POD/SVM
+processing. Annotation click/Enter/save/resume callbacks were exercised with
+Matplotlib's headless backend. Translation tests recover the known pixel
+positions; missing-structure tests flag uncertain frames and block label export.
+Pipeline tests reject any attempted K-means fit when TP labels are used.
+Neither actual Windows desktop operation nor experimental TP tracking accuracy
+was verified here; those require local inspection and independent landmarks.

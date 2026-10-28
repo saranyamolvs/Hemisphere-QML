@@ -1,5 +1,10 @@
 # Schlieren POD and quantum-kernel SVM feasibility study
 
+For **triple-point-position labels instead of K-means**, use
+`Triple_Point_Classification.ipynb` and the
+[TP workflow guide](docs/TRIPLE_POINT_WORKFLOW.md). It provides a first-20-frame
+click window, quality-flagged tracking, and training-mean ± SD vertical states.
+
 A runnable local Python project for a Windows folder of single-frame TIFF images. Configurations record **Mach 2.0, stagnation pressure 20 psia, acquisition 51,032 fps**, and a nominal 768-pixel width × 512-pixel height. Actual dimensions are read from the TIFF files. No experimental image or experimental result is included: the experiment has not yet been processed here.
 
 The first run uses 200 **consecutive** images. The full configuration uses up to 20,000. Default state count, crop, feature count, rank, and temporal gaps are exploratory settings rather than established properties of this flow.
