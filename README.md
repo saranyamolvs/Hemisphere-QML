@@ -8,6 +8,12 @@ reference sheets, training-mean ± SD vertical states, and per-test-image
 RBF-SVM/QSVM prediction checks. The notebook includes the requested Windows
 TIFF path, POD crop, and fixed ±0.009 mode-figure limits.
 
+To check whether POD features capture TP motion, use
+[`TP_POD_Diagnostics.ipynb`](TP_POD_Diagnostics.ipynb). It compares mode–TP
+relationships, leading versus training-ranked modes, continuous-position
+regression, and optional tighter-crop POD using training/validation data only.
+See [diagnostic instructions](docs/TP_POD_DIAGNOSTICS.md).
+
 A runnable local Python project for a Windows folder of single-frame TIFF images. Configurations record **Mach 2.0, stagnation pressure 20 psia, acquisition 51,032 fps**, and a nominal 768-pixel width × 512-pixel height. Actual dimensions are read from the TIFF files. No experimental image or experimental result is included: the experiment has not yet been processed here.
 
 The first run uses 200 **consecutive** images. The full configuration uses up to 20,000. Default state count, crop, feature count, rank, and temporal gaps are exploratory settings rather than established properties of this flow.
