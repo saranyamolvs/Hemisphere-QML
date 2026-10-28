@@ -52,7 +52,11 @@ Enable `EXPORT_REFERENCE_SHEETS` to save every frame, up to **16 per 4-by-4
 PNG**. At 20,000 frames this produces 1,250 sheets. Export before review to
 inspect flags, then rerun after review to keep resolved positions. Rerun after
 category export to include the category labels. `REFERENCE_TILE_WIDTH` controls
-thumbnail detail and disk use. One TIFF and one page are held at a time.
+thumbnail detail and disk use. Category sheets also show two horizontal lines:
+**cyan at training mean − SD**, separating Candidate 3 above from Candidate 2,
+and **yellow at training mean + SD**, separating Candidate 2 from Candidate 1
+below. The same frozen sensor-coordinate thresholds appear on every frame.
+The TP marker is drawn on top of the lines. One TIFF and one page are held at a time.
 Reference grayscale conversion does not affect TIFFs or POD intensities.
 
 `reference_sheets/tp_reference_index.csv` saves every original filename,

@@ -117,6 +117,9 @@ class TPReferenceTests(unittest.TestCase):
         category_dir = self.root / 'categories'
         category_dir.mkdir()
         states = category_dir / 'tp_states.csv'
+        definition_path = category_dir / 'tp_category_definition.json'
+        definition_path.write_text(json.dumps(dict(fit_partition='train',
+            upper_boundary_y_px=8., lower_boundary_y_px=16.)))
         fields = list(self.rows[0]) + ['label']
         with states.open('w', newline='') as handle:
             writer = csv.DictWriter(handle, fieldnames=fields)
@@ -126,6 +129,17 @@ class TPReferenceTests(unittest.TestCase):
         with Path(result['index_csv']).open() as handle:
             rows = list(csv.DictReader(handle))
         self.assertEqual(rows[0]['label'], 'candidate_2')
+        self.assertEqual(result['category_boundaries_y_px'], [8.,16.])
+        with Image.open(self.output / result['page_files'][0]) as page:
+            # Height doubles from 32 to 64 at width 96; pixel-center mapping.
+            self.assertEqual(page.getpixel((4,28+48+16)), (0,255,255))
+            self.assertEqual(page.getpixel((4,28+48+32)), (255,255,0))
+            # TP marker remains visible above the boundary overlays.
+            self.assertEqual(page.getpixel((47,28+48+21)), (255,165,0))
+        definition_path.write_text(json.dumps(dict(fit_partition='train',
+            upper_boundary_y_px=12., lower_boundary_y_px=16.)))
+        with self.assertRaisesRegex(ValueError, 're-export categories'):
+            export_tp_montages(states, self.root/'stale', manifest_path=self.manifest, tile_width=96)
         with self.assertRaisesRegex(ValueError, 'tile_width'):
             export_tp_montages(self.tracks, self.root/'invalid', tile_width=True)
 
