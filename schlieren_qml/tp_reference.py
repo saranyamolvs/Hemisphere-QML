@@ -93,6 +93,23 @@ def export_tp_montages(tracks_csv, output_directory, *, manifest_path=None,
         rows = list(reader)
     if len(rows) != len(paths):
         raise ValueError('Tracking CSV does not match the configured image sequence.')
+    # Category sheets use the same frozen training thresholds as label export.
+    # Plain tracking sheets (before category export) have no boundary lines.
+    definition_path = tracks.parent / 'tp_category_definition.json'
+    boundaries = None
+    if 'label' in fields and definition_path.is_file():
+        definition = json.loads(definition_path.read_text(encoding='utf-8'))
+        boundaries = [float(definition['upper_boundary_y_px']),
+                      float(definition['lower_boundary_y_px'])]
+        if (definition.get('fit_partition') != 'train'
+                or not np.all(np.isfinite(boundaries)) or boundaries[0] >= boundaries[1]):
+            raise ValueError('Category boundaries must be finite ordered training-defined positions.')
+        for row in rows:
+            y = float(row['y_px'])
+            expected = ('candidate_1' if y > boundaries[1] else
+                        'candidate_3' if y < boundaries[0] else 'candidate_2')
+            if row['label'] != expected:
+                raise ValueError('Category labels differ from saved TP boundaries; re-export categories.')
     additions = ['reference_page', 'reference_tile', 'thumbnail_x_px', 'thumbnail_y_px']
     if set(additions).intersection(fields):
         raise ValueError('Input CSV already contains reference-export columns; use the original tracks.')
@@ -135,6 +152,8 @@ def export_tp_montages(tracks_csv, output_directory, *, manifest_path=None,
                     draw = ImageDraw.Draw(page)
                     draw.text((6, 7), f'TP reference page {page_number}/{n_pages} | '
                               'Orange: accepted; magenta: needs review', fill='white')
+                    if boundaries is not None:
+                        draw.text((6, 18), 'C3 above cyan | C2 between lines | C1 below yellow', fill='white')
                 image = np.asarray(read_image(path), dtype=float)
                 if image.shape != (h, w) or not np.all(np.isfinite(image)):
                     raise ValueError(f'Image dimensions changed or pixels are not finite: {path.name}')
@@ -151,6 +170,14 @@ def export_tp_montages(tracks_csv, output_directory, *, manifest_path=None,
                 ty = float(np.clip(ty, 0, thumb_h - 1))
                 color = '#FFA500' if row['accepted'] == 'True' else '#FF00FF'
                 marker = ImageDraw.Draw(thumbnail)
+                if boundaries is not None:
+                    for boundary, line_color in zip(boundaries, ['#00FFFF', '#FFFF00']):
+                        # Apply exactly the pixel-center transform used for TP.
+                        # Out-of-frame thresholds are not clamped onto image edges.
+                        if 0 <= boundary <= h-1:
+                            line_y = (boundary + .5) * thumb_h / h - .5
+                            marker.line([(0, line_y), (tile_width-1, line_y)],
+                                        fill=line_color, width=1)
                 radius = max(3, int(round(tile_width / 64)))
                 marker.line([(tx-radius, ty), (tx+radius, ty)], fill=color, width=2)
                 marker.line([(tx, ty-radius), (tx, ty+radius)], fill=color, width=2)
@@ -180,6 +207,11 @@ def export_tp_montages(tracks_csv, output_directory, *, manifest_path=None,
                     'tracking_coordinates': 'Original sensor pixels; y increases downward.',
                     'display_conversion': 'Per-image min/max grayscale to 8-bit, resized for reference only.',
                     'marker_colors': {'orange': 'accepted', 'magenta': 'needs review'},
+                    'category_boundaries_y_px': boundaries,
+                    'category_definition_sha256': (hashlib.sha256(definition_path.read_bytes()).hexdigest()
+                                                   if boundaries is not None else None),
+                    'boundary_colors': {'cyan': 'training mean minus SD; C3/C2 boundary',
+                                        'yellow': 'training mean plus SD; C2/C1 boundary'},
                     'original_tiffs_modified': False}
         (staging / _MANIFEST).write_text(json.dumps(metadata, indent=2, allow_nan=False), encoding='utf-8')
         if output.exists():
