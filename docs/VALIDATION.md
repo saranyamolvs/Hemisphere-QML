@@ -4,9 +4,24 @@ Verified in the attached Linux environment using Python 3.12.14. No user
 experimental images were available. The Windows interactive crop window still
 requires a check on the user's computer.
 
-- **112 unittest cases: 111 passed, one optional Qiskit equivalence check skipped**
+- **120 unittest cases: 119 passed, one optional Qiskit equivalence check skipped**
   because Qiskit was unavailable. The mandatory NumPy quantum map was checked
   against independent explicit gate matrices and an analytic fidelity result.
+- The integrated conference notebook executed top-to-bottom in a real Jupyter
+  kernel on 150 private synthetic TIFFs, including synthetic blind-repeat point
+  inputs, repeatability/agreement reporting, a new training-only crop POD,
+  four matched fixed-dimension representations, nested classifier sample-size
+  curves, boundary analysis, timing, frozen selection and paired test evaluation.
+  A second validation execution with invalid strings in all test coefficient
+  and TP-y fields produced identical learning-curve scores. Synthetic annotations
+  exercise software only; they are not experimental measurement evidence.
+- Eight conference tests check numeric test exclusion, fixed dimensions/matched
+  samples, immediate measurement-pending status, analytical repeatability,
+  blind GUI callbacks, protected outputs, frozen recipe integrity, no test-time
+  hyperparameter search, paired block resampling, and a selected crop that
+  projects only sampled test TIFFs. Reference matrices/boundary plots and
+  fixed-dimension comparison figures were visually inspected. Actual Windows
+  desktop behavior and experimental measurement/calibration remain unverified.
 - The rebuilt TP notebook was executed top-to-bottom in a real Jupyter kernel
   using 150 private synthetic TIFFs. The check included one human-confirmed
   false alarm and one saved coordinate correction, immediate review application,
