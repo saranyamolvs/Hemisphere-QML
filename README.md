@@ -1,5 +1,12 @@
 # Schlieren POD and quantum-kernel SVM feasibility study
 
+For the integrated conference analysis, use
+[`Conference_Paper_Study.ipynb`](Conference_Paper_Study.ipynb) and the
+[conference workflow guide](docs/CONFERENCE_STUDY.md). It adds blind-repeat TP
+repeatability, fixed-dimension POD/crop comparisons, matched RBF-SVM/QSVM
+learning curves, boundary-error analysis, measured simulator costs, and a
+separately frozen test stage to your completed TP experiment.
+
 For **triple-point-position labels instead of K-means**, use
 `Triple_Point_Classification.ipynb` and the
 [TP workflow guide](docs/TRIPLE_POINT_WORKFLOW.md). It provides a first-20-frame
